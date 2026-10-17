@@ -1,6 +1,11 @@
 # No subiré los videos
 assets/videos/*.mp4
 
+# Archivos con credenciales de Firebase — NUNCA subir al repo
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+
 
 # Miscellaneous
 *.class
