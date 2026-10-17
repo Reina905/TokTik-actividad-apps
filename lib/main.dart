@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/config/theme/app_theme.dart';
 import 'package:toktok/presentation/providers/discover_provider.dart';
-import 'package:toktok/presentation/screens/discover/discover_screen.dart';
+import 'package:toktok/presentation/screens/main_screen.dart';
 
 void main() => runApp(const MyApp());
 
@@ -13,16 +13,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider( 
+        ChangeNotifierProvider(
           lazy: false,
-          create: (_) => DiscoverProvider()..loadNextPage() 
+          create: (_) => DiscoverProvider()..loadNextPage(),
         ),
       ],
       child: MaterialApp(
         title: 'TokTik',
         debugShowCheckedModeBanner: false,
         theme: AppTheme().getTheme(),
-        home: const DiscoverScreen()
+        home: const MainScreen(),
       ),
     );
   }
