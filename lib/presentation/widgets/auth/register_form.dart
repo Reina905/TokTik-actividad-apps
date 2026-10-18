@@ -34,6 +34,7 @@ class _RegisterFormState extends State<RegisterForm> {
   bool _acceptedTerms = false;
   bool _termsError = false;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -53,15 +54,27 @@ class _RegisterFormState extends State<RegisterForm> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     final isFormValid = _formKey.currentState!.validate();
-    setState(() => _termsError = !_acceptedTerms);
+    setState(() {
+      _termsError = !_acceptedTerms;
+      _errorMessage = null;
+    });
     if (!isFormValid || !_acceptedTerms) return;
 
     setState(() => _isLoading = true);
-    await context.read<AuthProvider>().register(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    try {
+      await context.read<AuthProvider>().register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      return;
+    }
     if (!mounted) return;
 
     widget.onAuthenticated();
@@ -157,6 +170,11 @@ class _RegisterFormState extends State<RegisterForm> {
                       ),
                     ),
                   const SizedBox(height: 12),
+
+                  if (_errorMessage != null) ...[
+                    AuthErrorMessage(message: _errorMessage!),
+                    const SizedBox(height: 12),
+                  ],
 
                   AuthPrimaryButton(
                     label: 'Crear cuenta',

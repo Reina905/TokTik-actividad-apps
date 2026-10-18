@@ -31,6 +31,7 @@ class _LoginFormState extends State<LoginForm> {
   bool _showPassword = false;
   bool _rememberMe = false;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -41,13 +42,23 @@ class _LoginFormState extends State<LoginForm> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    await context.read<AuthProvider>().login(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
+    try {
+      await context.read<AuthProvider>().login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      return;
+    }
     if (!mounted) return;
 
     widget.onAuthenticated();
@@ -124,6 +135,11 @@ class _LoginFormState extends State<LoginForm> {
                     ],
                   ),
                   const SizedBox(height: 10),
+
+                  if (_errorMessage != null) ...[
+                    AuthErrorMessage(message: _errorMessage!),
+                    const SizedBox(height: 12),
+                  ],
 
                   AuthPrimaryButton(
                     label: 'Iniciar sesión',

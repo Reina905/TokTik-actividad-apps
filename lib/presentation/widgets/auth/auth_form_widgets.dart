@@ -251,6 +251,43 @@ class AuthCheckbox extends StatelessWidget {
 }
 
 
+// ─── Mensaje de error de Firebase ─────────────────────────────────────────────
+
+class AuthErrorMessage extends StatelessWidget {
+
+  final String message;
+
+  const AuthErrorMessage({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AuthColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AuthColors.error.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AuthColors.error, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 13,
+                color: AuthColors.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 // ─── Validaciones ─────────────────────────────────────────────────────────────
 
 class AuthValidators {
