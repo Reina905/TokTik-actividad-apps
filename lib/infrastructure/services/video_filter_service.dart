@@ -11,11 +11,39 @@ import 'package:toktok/presentation/widgets/filters/face_filter_utils.dart';
 /// en el archivo de video usando FFmpeg.
 ///
 /// Flujo:
-///  1. [renderFilterOverlay] pinta los overlays del filtro sobre un canvas
+///  1. [extractFirstFrame] extrae el primer fotograma del video con FFmpeg
+///     como PNG en las dimensiones reales del video.
+///  2. [renderFilterOverlay] pinta los overlays del filtro sobre un canvas
 ///     transparente (mismas dimensiones que el video) y lo exporta como PNG.
-///  2. [burnFilterIntoVideo] llama a FFmpeg para componer ese PNG sobre el video.
-///  3. [applyFilterToVideo] orquesta ambos pasos y devuelve el archivo resultante.
+///  3. [burnFilterIntoVideo] llama a FFmpeg para componer ese PNG sobre el video.
+///  4. [applyFilterToVideo] orquesta ambos pasos y devuelve el archivo resultante.
 class VideoFilterService {
+  /// Extrae el primer fotograma del [videoFile] como archivo PNG temporal.
+  ///
+  /// Usa FFmpeg (`-vframes 1`) para garantizar que el PNG tiene exactamente
+  /// las mismas dimensiones que el video — esencial para que las coordenadas
+  /// de ML Kit coincidan con el overlay que se quemará después.
+  ///
+  /// Devuelve null si FFmpeg falla o el archivo no se crea.
+  static Future<File?> extractFirstFrame(File videoFile) async {
+    final outputPath =
+        '${Directory.systemTemp.path}'
+        '/video_frame_${DateTime.now().millisecondsSinceEpoch}.png';
+
+    // -ss 0      → buscar al inicio
+    // -vframes 1 → extraer solo un frame
+    // -q:v 2     → calidad alta del PNG
+    final command =
+        '-ss 0 -i "${videoFile.path}" -vframes 1 -q:v 2 "$outputPath"';
+
+    final session = await FFmpegKit.execute(command);
+    final returnCode = await session.getReturnCode();
+
+    if (!ReturnCode.isSuccess(returnCode)) return null;
+
+    final frameFile = File(outputPath);
+    return (await frameFile.exists()) ? frameFile : null;
+  }
   /// Renderiza el overlay del filtro para los [faces] detectados en un canvas
   /// transparente de [videoWidth] × [videoHeight] y lo guarda como PNG temporal.
   ///

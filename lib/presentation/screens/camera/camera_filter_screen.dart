@@ -33,6 +33,9 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
   List<Face> _faces = [];
   Size? _frameSize;
   bool _isProcessing = false;
+  // Timestamp del último frame procesado — evita encolar frames más rápido
+  // de lo que ML Kit puede procesarlos, especialmente durante la grabación.
+  DateTime _lastFrameTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ── Filtros ───────────────────────────────────────────────────────────────
   FaceFilterType _selectedFilter = FaceFilterType.none;
@@ -115,9 +118,9 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
   Future<void> _startRecording() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    if (controller.value.isStreamingImages) {
-      await controller.stopImageStream();
-    }
+    // A partir de camera ^0.10.0 se puede grabar video y mantener
+    // el image stream activo al mismo tiempo, lo que permite que
+    // ML Kit siga detectando rostros y el filtro siga al movimiento.
     await controller.startVideoRecording();
     setState(() => _isRecording = true);
   }
@@ -125,16 +128,17 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
   Future<void> _stopRecording() async {
     final controller = _controller;
     if (controller == null) return;
-    final file = await controller.stopVideoRecording();
 
-    // Capturar el estado del filtro justo antes de navegar para
-    // que UploadScreen pueda aplicar el filtro al video y mostrarlo.
+    // Capturar el estado del filtro ANTES de detener la grabación
+    // para garantizar que corresponde al último frame detectado.
     final filterAtStop = _selectedFilter;
     final assetsAtStop = _filterAssets;
     final facesAtStop = List<Face>.from(_faces);
     final frameSizeAtStop = _frameSize;
     final isFront = _cameras[_cameraIndex].lensDirection ==
         CameraLensDirection.front;
+
+    final file = await controller.stopVideoRecording();
 
     setState(() => _isRecording = false);
 
@@ -159,6 +163,13 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
 
   Future<void> _processFrame(CameraImage image) async {
     if (_isProcessing || _selectedFilter == FaceFilterType.none) return;
+
+    // Limitar a ~15 fps para ML Kit — procesar cada 66 ms es suficiente
+    // para que el filtro siga el movimiento sin saturar la CPU.
+    final now = DateTime.now();
+    if (now.difference(_lastFrameTime).inMilliseconds < 66) return;
+    _lastFrameTime = now;
+
     final inputImage = _toInputImage(image);
     if (inputImage == null) return;
 

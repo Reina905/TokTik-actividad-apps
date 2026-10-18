@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/infrastructure/services/video_filter_service.dart';
@@ -121,42 +120,40 @@ class _UploadScreenState extends State<UploadScreen> {
     if (mounted) controller.play();
   }
 
-  /// Captura el frame actual del VideoPlayer como imagen PNG temporal
-  /// y lo pasa a ML Kit para detectar rostros.
+  /// Extrae el primer frame del video con FFmpeg, lo pasa a ML Kit para
+  /// detectar rostros, y asigna [_frameSize] con las dimensiones reales
+  /// del video (no del widget en pantalla).
   Future<void> _detectFacesInVideoFrame() async {
     setState(() => _isDetecting = true);
     try {
-      // Capturar el widget del VideoPlayer como imagen con RenderRepaintBoundary
-      final boundary = _videoFrameKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary == null) {
-        if (mounted) setState(() => _isDetecting = false);
-        return;
-      }
-
-      final image = await boundary.toImage(pixelRatio: 1.0);
-      final byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null || !mounted) {
+      // Extraer el primer frame del video como PNG usando FFmpeg.
+      // Esto garantiza que las dimensiones del frame coinciden exactamente
+      // con las del video, lo cual es esencial para escalar el overlay.
+      final frameFile = await VideoFilterService.extractFirstFrame(widget.file);
+      if (frameFile == null || !mounted) {
         setState(() => _isDetecting = false);
         return;
       }
 
-      // Guardar el frame como archivo temporal para ML Kit
-      final frameFile = File(
-        '${Directory.systemTemp.path}/video_frame_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await frameFile.writeAsBytes(byteData.buffer.asUint8List());
+      // Leer dimensiones reales del frame extraído
+      final bytes = await frameFile.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final realWidth = frame.image.width.toDouble();
+      final realHeight = frame.image.height.toDouble();
+      frame.image.dispose();
 
       final inputImage = InputImage.fromFile(frameFile);
       final faces = await _faceDetector.processImage(inputImage);
 
-      // Limpiar el archivo temporal
+      // Limpiar el frame temporal
       try { await frameFile.delete(); } catch (_) {}
 
       if (!mounted) return;
       setState(() {
         _faces = faces;
+        // frameSize en coordenadas del frame real del video — igual al video
+        _frameSize = Size(realWidth, realHeight);
         _isDetecting = false;
       });
     } catch (_) {
