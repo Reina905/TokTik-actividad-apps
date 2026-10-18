@@ -8,6 +8,7 @@ import 'package:toktok/infrastructure/repositories/profile_repository.dart';
 import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/providers/discover_provider.dart';
 import 'package:toktok/presentation/providers/upload_video_provider.dart';
+import 'package:toktok/presentation/screens/auth/auth_screen.dart';
 import 'package:toktok/presentation/screens/main_screen.dart';
 
 void main() async {
@@ -46,8 +47,25 @@ class MyApp extends StatelessWidget {
         title: 'TokTik',
         debugShowCheckedModeBanner: false,
         theme: AppTheme().getTheme(),
-        home: const MainScreen(),
+        home: const AuthGate(),
       ),
     );
+  }
+}
+
+/// Decide qué mostrar al arrancar: si hay sesión iniciada (Firebase
+/// la recuerda), va directo al feed; si no, muestra la pantalla de login.
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
+    if (!authProvider.isLoggedIn) {
+      return const AuthScreen();
+    }
+
+    return const MainScreen();
   }
 }

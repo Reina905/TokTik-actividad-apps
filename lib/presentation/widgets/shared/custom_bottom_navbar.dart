@@ -26,37 +26,25 @@ class CustomBottomNavbar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Descubrimiento
-              _NavItem(
-                icon: Icons.explore_outlined,
-                activeIcon: Icons.explore,
-                label: 'Descubrir',
-                isActive: currentIndex == 0,
-                onTap: () => onTap(0),
-              ),
-
               // Feed
               _NavItem(
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home,
                 label: 'Feed',
-                isActive: currentIndex == 1,
-                onTap: () => onTap(1),
+                isActive: currentIndex == 0,
+                onTap: () => onTap(0),
               ),
 
               // Botón de más (central)
-              _AddButton(onTap: () => onTap(2)),
-
-              // Espacio vacío para balancear el botón +
-              const SizedBox(width: 8),
+              _AddButton(onTap: () => onTap(1)),
 
               // Perfil
               _NavItem(
                 icon: Icons.person_outline,
                 activeIcon: Icons.person,
                 label: 'Perfil',
-                isActive: currentIndex == 3,
-                onTap: () => onTap(3),
+                isActive: currentIndex == 2,
+                onTap: () => onTap(2),
               ),
             ],
           ),

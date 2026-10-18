@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/presentation/providers/auth_provider.dart';
+import 'package:toktok/presentation/screens/profile/creator_profile_screen.dart';
 import 'package:toktok/presentation/widgets/auth/auth_popup.dart';
 import 'package:toktok/presentation/widgets/auth/auth_styles.dart';
 
@@ -11,10 +12,18 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
 
-    return Scaffold(
-      body: authProvider.isLoggedIn
-        ? _LoggedInView(authProvider: authProvider)
-        : const _LoggedOutView(),
+    // Sin sesión: invita a iniciar sesión
+    if (!authProvider.isLoggedIn) {
+      return const _LoggedOutView();
+    }
+
+    // Con sesión: usa el CreatorProfileScreen del equipo con el uid del usuario.
+    // Se pasa el nombre como fallback porque en LocalProfileDataSource los
+    // usuarios de Firebase no existen; así se crea un perfil por defecto.
+    return CreatorProfileScreen(
+      uid: authProvider.userId!,
+      showBackButton: false,
+      fallbackName: authProvider.userName ?? 'Mi perfil',
     );
   }
 }
@@ -61,47 +70,6 @@ class _LoggedOutView extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-
-// ─── Con sesión: perfil pendiente de implementar ──────────────────────────────
-
-class _LoggedInView extends StatelessWidget {
-
-  final AuthProvider authProvider;
-
-  const _LoggedInView({required this.authProvider});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircleAvatar(
-            radius: 40,
-            backgroundColor: Colors.white24,
-            child: Icon(Icons.person, size: 48, color: Colors.white54),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            authProvider.userName ?? 'Perfil',
-            style: const TextStyle(fontSize: 22, color: Colors.white),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            authProvider.userEmail ?? '',
-            style: const TextStyle(fontSize: 14, color: Colors.white54),
-          ),
-          const SizedBox(height: 20),
-          TextButton(
-            onPressed: authProvider.logout,
-            child: const Text('Cerrar sesión'),
-          ),
-        ],
       ),
     );
   }

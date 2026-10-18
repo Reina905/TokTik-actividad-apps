@@ -13,10 +13,20 @@ class CreatorProfileScreen extends StatelessWidget {
   // Qué hacer al tocar atras
   final VoidCallback? onBack;
 
+  // Mostrar o no el botón de retroceso. Cuando se abre desde el
+  // navbar (mi perfil) no aplica volver; desde un video sí.
+  final bool showBackButton;
+
+  // Nombre de respaldo para crear un perfil por defecto cuando no
+  // existe en la fuente de datos (perfil propio desde el navbar).
+  final String? fallbackName;
+
   const CreatorProfileScreen({
     super.key,
     required this.uid,
     this.onBack,
+    this.showBackButton = true,
+    this.fallbackName,
   });
 
   @override
@@ -26,16 +36,26 @@ class CreatorProfileScreen extends StatelessWidget {
       create: (context) => ProfileProvider(
         repository: context.read<ProfileRepository>(),
         uid: uid,
-      )..loadProfile(currentUid: context.read<AuthProvider>().userId),
-      child: _CreatorProfileView(onBack: onBack),
+      )..loadProfile(
+          currentUid: context.read<AuthProvider>().userId,
+          fallbackName: fallbackName,
+        ),
+      child: _CreatorProfileView(
+        onBack: onBack,
+        showBackButton: showBackButton,
+      ),
     );
   }
 }
 
 class _CreatorProfileView extends StatelessWidget {
   final VoidCallback? onBack;
+  final bool showBackButton;
 
-  const _CreatorProfileView({this.onBack});
+  const _CreatorProfileView({
+    this.onBack,
+    this.showBackButton = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -47,10 +67,22 @@ class _CreatorProfileView extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: onBack ?? () => Navigator.maybePop(context),
-        ),
+        automaticallyImplyLeading: showBackButton,
+        leading: showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                onPressed: onBack ?? () => Navigator.maybePop(context),
+              )
+            : null,
+        // Botón de cerrar sesión solo en el perfil propio (navbar)
+        actions: showBackButton
+            ? null
+            : [
+                IconButton(
+                  icon: const Icon(Icons.logout, size: 22),
+                  onPressed: () => context.read<AuthProvider>().logout(),
+                ),
+              ],
         title: Text(
           profile?.name ?? '',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),

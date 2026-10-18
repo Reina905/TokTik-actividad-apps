@@ -3,6 +3,7 @@ import 'package:toktok/domain/entities/video_post.dart';
 import 'package:toktok/presentation/screens/profile/creator_profile_screen.dart';
 import 'package:toktok/presentation/widgets/shared/video_buttons.dart';
 import 'package:toktok/presentation/widgets/video/fullscreen_player.dart';
+import 'package:toktok/presentation/widgets/video/video_background.dart';
 
 /// Un video del feed. Si tiene autor, al deslizar a la izquierda
 /// se abre el perfil del creador
@@ -44,13 +45,28 @@ class _VideoPageWithProfileState extends State<VideoPageWithProfile> {
     // Misma estructura que tenía cada página de VideoScrollableView
     final videoPage = Stack(
       children: [
-        // Video Player + gradiente
+        // Video Player o imagen + gradiente
         SizedBox.expand(
-          child: FullScreenPlayer(
-            caption: videoPost.caption,
-            videoUrl: videoPost.videoUrl,
-          ),
+          child: videoPost.isVideo
+              ? FullScreenPlayer(
+                  caption: videoPost.caption,
+                  videoUrl: videoPost.videoUrl,
+                )
+              : Image.network(
+                  videoPost.videoUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image,
+                        color: Colors.white54, size: 48),
+                  ),
+                ),
         ),
+
+        // Gradiente para que se lea el caption en imágenes
+        if (!videoPost.isVideo)
+          VideoBackground(stops: const [0.7, 1.0]),
 
         // Botones
         Positioned(

@@ -21,7 +21,7 @@ class ProfileProvider extends ChangeNotifier {
 
   bool _isDisposed = false;
 
-  Future<void> loadProfile({String? currentUid}) async {
+  Future<void> loadProfile({String? currentUid, String? fallbackName}) async {
     initialLoading = true;
     errorMessage = null;
     _notify();
@@ -30,7 +30,24 @@ class ProfileProvider extends ChangeNotifier {
       final result = await repository.getProfileByUid(uid);
 
       if (result == null) {
-        errorMessage = 'Este usuario no existe';
+        // Si hay un nombre de respaldo (perfil propio del navbar), se crea un
+        // perfil por defecto. Con LocalProfileDataSource los usuarios de
+        // Firebase no existen en los datos locales, así que se les crea uno
+        // vacío. Con Firestore esto no sería necesario: el perfil existiría.
+        if (fallbackName != null) {
+          profile = UserProfile(
+            uid: uid,
+            name: fallbackName,
+            username: _usernameFromName(fallbackName),
+            bio: '',
+            following: 0,
+            followers: 0,
+            likes: 0,
+          );
+          videos = [];
+        } else {
+          errorMessage = 'Este usuario no existe';
+        }
       } else {
         profile = result;
         videos = await repository.getVideosByUser(uid);
@@ -42,6 +59,12 @@ class ProfileProvider extends ChangeNotifier {
 
     initialLoading = false;
     _notify();
+  }
+
+  /// Convierte un nombre para usarlo como username (minúsculas, sin espacios)
+  String _usernameFromName(String name) {
+    final username = name.toLowerCase().trim().replaceAll(' ', '_');
+    return username.isEmpty ? 'usuario' : username;
   }
 
   Future<void> toggleFollow(String currentUid) async {

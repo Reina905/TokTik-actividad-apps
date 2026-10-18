@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:toktok/presentation/providers/upload_video_provider.dart';
 import 'package:toktok/presentation/screens/camera/camera_filter_screen.dart';
 import 'package:toktok/presentation/screens/discover/discover_screen.dart';
-import 'package:toktok/presentation/screens/feed/feed_screen.dart';
 import 'package:toktok/presentation/screens/profile/profile_screen.dart';
 import 'package:toktok/presentation/screens/upload/upload_screen.dart';
 import 'package:toktok/presentation/widgets/shared/custom_bottom_navbar.dart';
@@ -22,13 +21,12 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = const [
     DiscoverScreen(),
-    FeedScreen(),
-    SizedBox.shrink(), // índice 2 = botón +, sin pantalla
+    SizedBox.shrink(), // índice 1 = botón +, sin pantalla
     ProfileScreen(),
   ];
 
   void _onTabTap(int index) {
-    if (index == 2) {
+    if (index == 1) {
       _showAddContentModal();
       return;
     }

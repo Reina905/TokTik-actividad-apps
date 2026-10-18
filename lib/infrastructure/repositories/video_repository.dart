@@ -47,6 +47,7 @@ class VideoRepository {
         userId: data['userId'],
         likes: (data['likes'] ?? 0) as int,
         views: (data['views'] ?? 0) as int,
+        isVideo: data['isVideo'] ?? true,
       );
     }).toList();
   }

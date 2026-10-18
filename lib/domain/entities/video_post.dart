@@ -6,6 +6,7 @@ class VideoPost {
   final String? userId;
   final int likes;
   final int views;
+  final bool isVideo; // false = foto subida a Cloudinary
 
   VideoPost({
     this.id,
@@ -15,5 +16,6 @@ class VideoPost {
     this.userId,
     this.likes = 0,
     this.views = 0,
+    this.isVideo = true,
   });
 }
