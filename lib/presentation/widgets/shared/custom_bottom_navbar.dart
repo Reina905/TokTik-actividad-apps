@@ -30,10 +30,19 @@ class CustomBottomNavbar extends StatelessWidget {
               _NavItem(
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home,
-                label: 'Feed',
+                label: 'Home',
                 isActive: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
+              
+              _NavItem(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home,
+                label: 'Feed',
+                isActive: currentIndex == 1,
+                onTap: () => onTap(1),
+        ),
+
 
               // Botón de más (central)
               _AddButton(onTap: () => onTap(1)),

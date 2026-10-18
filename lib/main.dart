@@ -11,6 +11,7 @@ import 'package:toktok/presentation/providers/discover_provider.dart';
 import 'package:toktok/presentation/providers/upload_video_provider.dart';
 import 'package:toktok/presentation/screens/auth/auth_screen.dart';
 import 'package:toktok/presentation/screens/main_screen.dart';
+import 'package:toktok/presentation/providers/feed_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +47,9 @@ class MyApp extends StatelessWidget {
         // VideoRepository para consultar videos de Firestore (feed y perfil)
         Provider(
           create: (_) => VideoRepository(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => FeedProvider()..loadNextPage(),
         ),
       ],
       child: MaterialApp(

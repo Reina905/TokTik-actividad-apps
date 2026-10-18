@@ -1,0 +1,294 @@
+﻿
+// ===== lib\infrastructure\repositories\video_repository.dart =====
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:toktok/domain/entities/video_post.dart';
+
+class VideoRepository {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  static const String _collection = 'videos';
+
+  /// Guarda los metadatos del archivo en Firestore.
+  /// [isVideo] indica si es video (true) o imagen (false).
+  /// Devuelve el ID del documento creado.
+  Future<String> saveVideo({
+    required String cloudinaryUrl,
+    required String caption,
+    String? userId,
+    String? thumbnailUrl,
+    bool isVideo = true,
+  }) async {
+    final docRef = await _db.collection(_collection).add({
+      'cloudinaryUrl': cloudinaryUrl,
+      'caption': caption,
+      'userId': userId ?? 'anonimo',
+      'thumbnailUrl': thumbnailUrl ?? '',
+      'isVideo': isVideo,
+      'likes': 0,
+      'views': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return docRef.id;
+  }
+
+  /// Obtiene todos los videos ordenados por fecha de creaciÃ³n.
+  Future<List<VideoPost>> getVideos() async {
+    final snapshot = await _db
+        .collection(_collection)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) => _docToVideoPost(doc)).toList();
+  }
+
+  /// Obtiene los videos subidos por un usuario especÃ­fico.
+  Future<List<VideoPost>> getVideosByUser(String uid) async {
+    final snapshot = await _db
+        .collection(_collection)
+        .where('userId', isEqualTo: uid)
+        .get();
+
+    final docs = snapshot.docs.toList();
+    // Ordenar en memoria por createdAt (desc) para no requerir Ã­ndice compuesto
+    docs.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return (bTime as Timestamp).compareTo(aTime as Timestamp);
+    });
+
+    return docs.map((doc) => _docToVideoPost(doc)).toList();
+  }
+
+  VideoPost _docToVideoPost(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    return VideoPost(
+      id: doc.id,
+      caption: data['caption'] ?? '',
+      videoUrl: data['cloudinaryUrl'] ?? '',
+      thumbnailUrl: data['thumbnailUrl'],
+      userId: data['userId'],
+      likes: (data['likes'] ?? 0) as int,
+      views: (data['views'] ?? 0) as int,
+      isVideo: data['isVideo'] ?? true,
+    );
+  }
+
+  /// Incrementa el contador de likes de un video.
+  Future<void> toggleLike(String videoId) async {
+    await _db.collection(_collection).doc(videoId).update({
+      'likes': FieldValue.increment(1),
+    });
+  }
+
+  /// Incrementa el contador de vistas.
+  Future<void> incrementViews(String videoId) async {
+    await _db.collection(_collection).doc(videoId).update({
+      'views': FieldValue.increment(1),
+    });
+  }
+}
+
+// ===== lib\presentation\providers\discover_provider.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:toktok/domain/entities/video_post.dart';
+import 'package:toktok/infrastructure/repositories/video_repository.dart';
+
+class DiscoverProvider extends ChangeNotifier {
+  final VideoRepository _videoRepository = VideoRepository();
+
+  bool initialLoading = true;
+  List<VideoPost> videos = [];
+  String? errorMessage;
+
+  /// Carga los videos desde Firestore (URLs de Cloudinary).
+  Future<void> loadNextPage() async {
+    try {
+      videos = await _videoRepository.getVideos();
+    } catch (e) {
+      errorMessage = 'No se pudieron cargar los videos';
+    }
+    initialLoading = false;
+    notifyListeners();
+  }
+
+  /// Reintenta la carga desde Firestore.
+  Future<void> reload() async {
+    initialLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    await loadNextPage();
+  }
+}
+
+// ===== lib\presentation\screens\feed\feed_screen.dart =====
+
+import 'package:flutter/material.dart';
+
+class FeedScreen extends StatelessWidget {
+  const FeedScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.home, size: 64, color: Colors.white54),
+            SizedBox(height: 12),
+            Text(
+              'Feed',
+              style: TextStyle(fontSize: 22, color: Colors.white),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'PrÃ³ximamente',
+              style: TextStyle(fontSize: 14, color: Colors.white54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ===== lib\presentation\widgets\shared\video_page_with_profile.dart =====
+
+import 'package:flutter/material.dart';
+import 'package:toktok/domain/entities/video_post.dart';
+import 'package:toktok/presentation/screens/profile/creator_profile_screen.dart';
+import 'package:toktok/presentation/widgets/shared/video_buttons.dart';
+import 'package:toktok/presentation/widgets/video/fullscreen_player.dart';
+import 'package:toktok/presentation/widgets/video/video_background.dart';
+
+/// Un video del feed. Si tiene autor, al deslizar a la izquierda
+/// se abre el perfil del creador
+class VideoPageWithProfile extends StatefulWidget {
+  final VideoPost videoPost;
+
+  const VideoPageWithProfile({
+    super.key,
+    required this.videoPost,
+  });
+
+  @override
+  State<VideoPageWithProfile> createState() => _VideoPageWithProfileState();
+}
+
+class _VideoPageWithProfileState extends State<VideoPageWithProfile> {
+  final PageController _pageController = PageController();
+
+  void _goToPage(int page) {
+    _pageController.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final videoPost = widget.videoPost;
+    final authorUid = videoPost.userId ?? '';
+    final hasAuthor = authorUid.isNotEmpty;
+
+    // Misma estructura que tenÃ­a cada pÃ¡gina de VideoScrollableView
+    final videoPage = Stack(
+      children: [
+        // Video Player o imagen + gradiente
+        SizedBox.expand(
+          child: videoPost.isVideo
+              ? FullScreenPlayer(
+                  caption: videoPost.caption,
+                  videoUrl: videoPost.videoUrl,
+                )
+              : Image.network(
+                  videoPost.videoUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image,
+                        color: Colors.white54, size: 48),
+                  ),
+                ),
+        ),
+
+        // Gradiente para que se lea el caption en imÃ¡genes
+        if (!videoPost.isVideo)
+          VideoBackground(stops: const [0.7, 1.0]),
+
+        // Botones
+        Positioned(
+          bottom: 40,
+          right: 20,
+          child: VideoButtons(
+            video: videoPost,
+            onProfileTap: hasAuthor ? () => _goToPage(1) : null,
+          ),
+        ),
+      ],
+    );
+
+    // Videos sin autor, subidos como 'anonimo': solo el video, sin perfil
+    if (!hasAuthor) return videoPage;
+
+    return PageView(
+      controller: _pageController,
+      children: [
+        videoPage,
+        CreatorProfileScreen(
+          uid: authorUid,
+          onBack: () => _goToPage(0),
+        ),
+      ],
+    );
+  }
+}
+
+// ===== lib\infrastructure\models\local_video_model.dart =====
+
+import 'package:toktok/domain/entities/video_post.dart';
+
+class LocalVideoModel {
+  final String name;
+  final String videoUrl;
+  final String userId;
+  final int likes;
+  final int views;
+
+  LocalVideoModel(
+      {required this.name,
+      required this.videoUrl,
+      required this.userId,
+      this.likes = 0,
+      this.views = 0});
+
+  factory LocalVideoModel.fromJson(Map<String, dynamic> json) =>
+      LocalVideoModel(
+        name: json['name'] ?? 'No name',
+        videoUrl: json['videoUrl'],
+        userId: json['userId'] ?? '',
+        likes: json['likes'] ?? 0,
+        views: json['views'] ?? 0,
+      );
+
+  VideoPost toVideoPostEntity() => VideoPost(
+      caption: name,
+      videoUrl: videoUrl,
+      userId: userId,
+      likes: likes,
+      views: views);
+}

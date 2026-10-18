@@ -7,6 +7,7 @@ import 'package:toktok/presentation/screens/camera/camera_filter_screen.dart';
 import 'package:toktok/presentation/screens/discover/discover_screen.dart';
 import 'package:toktok/presentation/screens/profile/profile_screen.dart';
 import 'package:toktok/presentation/screens/upload/upload_screen.dart';
+import 'package:toktok/presentation/screens/feed/feed_screen.dart';
 import 'package:toktok/presentation/widgets/shared/custom_bottom_navbar.dart';
 
 class MainScreen extends StatefulWidget {
@@ -20,13 +21,14 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
-    DiscoverScreen(),
-    SizedBox.shrink(), // índice 1 = botón +, sin pantalla
-    ProfileScreen(),
+    DiscoverScreen(),   // 0 = Descubrir (home)
+    FeedScreen(),       // 1 = Feed
+    SizedBox.shrink(),  // 2 = botón +, sin pantalla
+    ProfileScreen(),    // 3 = Perfil
   ];
 
   void _onTabTap(int index) {
-    if (index == 1) {
+    if (index == 2) {
       _showAddContentModal();
       return;
     }

@@ -1,14 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:toktok/domain/entities/video_post.dart';
 
+class VideoPage {
+  final List<VideoPost> videos;
+  final DocumentSnapshot<Map<String, dynamic>>? lastDoc;
+  final bool hasMore;
+
+  VideoPage({
+    required this.videos,
+    required this.lastDoc,
+    required this.hasMore,
+  });
+}
+
 class VideoRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   static const String _collection = 'videos';
 
-  /// Guarda los metadatos del archivo en Firestore.
-  /// [isVideo] indica si es video (true) o imagen (false).
-  /// Devuelve el ID del documento creado.
   Future<String> saveVideo({
     required String cloudinaryUrl,
     required String caption,
@@ -30,7 +39,6 @@ class VideoRepository {
     return docRef.id;
   }
 
-  /// Obtiene todos los videos ordenados por fecha de creación.
   Future<List<VideoPost>> getVideos() async {
     final snapshot = await _db
         .collection(_collection)
@@ -40,7 +48,29 @@ class VideoRepository {
     return snapshot.docs.map((doc) => _docToVideoPost(doc)).toList();
   }
 
-  /// Obtiene los videos subidos por un usuario específico.
+  
+  Future<VideoPage> getVideosPage({
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    int limit = 5,
+  }) async {
+    var query = _db
+        .collection(_collection)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+
+    return VideoPage(
+      videos: snapshot.docs.map((doc) => _docToVideoPost(doc)).toList(),
+      lastDoc: snapshot.docs.isNotEmpty ? snapshot.docs.last : startAfter,
+      hasMore: snapshot.docs.length == limit,
+    );
+  }
+
   Future<List<VideoPost>> getVideosByUser(String uid) async {
     final snapshot = await _db
         .collection(_collection)
@@ -48,7 +78,6 @@ class VideoRepository {
         .get();
 
     final docs = snapshot.docs.toList();
-    // Ordenar en memoria por createdAt (desc) para no requerir índice compuesto
     docs.sort((a, b) {
       final aTime = a.data()['createdAt'];
       final bTime = b.data()['createdAt'];
@@ -75,14 +104,12 @@ class VideoRepository {
     );
   }
 
-  /// Incrementa el contador de likes de un video.
   Future<void> toggleLike(String videoId) async {
     await _db.collection(_collection).doc(videoId).update({
       'likes': FieldValue.increment(1),
     });
   }
 
-  /// Incrementa el contador de vistas.
   Future<void> incrementViews(String videoId) async {
     await _db.collection(_collection).doc(videoId).update({
       'views': FieldValue.increment(1),
