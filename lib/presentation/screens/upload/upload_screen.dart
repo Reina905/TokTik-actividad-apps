@@ -38,9 +38,6 @@ class _UploadScreenState extends State<UploadScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // ── Filtros ───────────────────────────────────────────────────────────────
-  // Para fotos: se detectan rostros y se renderiza el filtro quemado en PNG.
-  // Para videos: se muestra el filtro como overlay visual en el preview.
-  //              El video se sube con los filtros renderizados frame a frame.
   ui.Image? _decodedImage;
   List<Face> _faces = [];
   FaceFilterType _selectedFilter = FaceFilterType.none;
@@ -101,12 +98,9 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  /// Extrae el primer frame visible del video y detecta los rostros.
-  /// Así podemos mostrar el overlay del filtro en el preview del video.
   Future<void> _detectFacesInVideoFrame() async {
     setState(() => _isDetecting = true);
     try {
-      // Usar el archivo directamente — ML Kit puede leer el primer frame
       final inputImage = InputImage.fromFile(widget.file);
       final faces = await _faceDetector.processImage(inputImage);
       if (!mounted) return;
@@ -152,8 +146,6 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // ── Renderizado de foto con filtro ────────────────────────────────────────
 
-  /// Renderiza la imagen con el filtro aplicado a un archivo temporal.
-  /// Devuelve null si no hay filtro o si falla (se sube el original).
   Future<File?> _renderFilteredImage() async {
     if (_selectedFilter == FaceFilterType.none || _decodedImage == null) {
       return null;
@@ -163,7 +155,6 @@ class _UploadScreenState extends State<UploadScreen> {
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
 
-      // Pintar imagen + overlays del filtro a resolución original
       final painter = StaticFilterPainter(
         image: image,
         faces: _faces,
@@ -198,32 +189,37 @@ class _UploadScreenState extends State<UploadScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final uploadProvider = context.read<UploadVideoProvider>();
-    final userId = context.read<AuthProvider>().userId;
+    final authProvider = context.read<AuthProvider>();
+    final userId = authProvider.userId;
+    final userName = authProvider.userName;
     final discoverProvider = context.read<DiscoverProvider>();
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    // Si es foto con filtro, renderizar la imagen con el filtro aplicado
+    // 1. Renderizar filtro en foto si corresponde
     File fileToUpload = widget.file;
     if (!widget.isVideo && _selectedFilter != FaceFilterType.none) {
       final rendered = await _renderFilteredImage();
-      if (rendered != null) {
-        fileToUpload = rendered;
-      }
+      if (rendered != null) fileToUpload = rendered;
     }
 
+    // 2. Subir el archivo principal a Cloudinary y guardar en Firestore.
+    //    El thumbnailUrl se calcula a partir de la URL de Cloudinary
+    //    ya subida usando _thumbnailUrlFromCloudinary().
     final success = await uploadProvider.uploadFile(
       file: fileToUpload,
       caption: _captionController.text.trim(),
       isVideo: widget.isVideo,
       userId: userId,
+      userName: userName,
+      // Se pasa null aquí; el repositorio lo recibirá del provider
+      // una vez tengamos la cloudinaryUrl. Ver uploadFile() en el provider.
     );
 
     if (!mounted) return;
 
     if (success) {
       discoverProvider.reload();
-
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -347,7 +343,7 @@ class _FormView extends StatelessWidget {
               ),
             ),
 
-            // ── Selector de filtro (fotos y videos) ───────────────────────
+            // ── Selector de filtro ────────────────────────────────────────
             const SizedBox(height: 12),
             FilterSelector(
               selected: selectedFilter,
@@ -479,7 +475,6 @@ class _VideoPreviewWithFilter extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // ── Reproductor de video ────────────────────────────────────────
         FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
@@ -488,8 +483,6 @@ class _VideoPreviewWithFilter extends StatelessWidget {
             child: VideoPlayer(controller!),
           ),
         ),
-
-        // ── Overlay del filtro (si hay rostros detectados y filtro activo)
         if (selectedFilter != FaceFilterType.none && faces.isNotEmpty)
           _VideoFilterOverlay(
             controller: controller!,
@@ -497,8 +490,6 @@ class _VideoPreviewWithFilter extends StatelessWidget {
             filterAssets: filterAssets,
             selectedFilter: selectedFilter,
           ),
-
-        // ── Indicador de detección ──────────────────────────────────────
         if (isDetecting)
           Positioned(
             bottom: 8,
@@ -519,8 +510,6 @@ class _VideoPreviewWithFilter extends StatelessWidget {
               ),
             ),
           ),
-
-        // ── Icono de video ──────────────────────────────────────────────
         Positioned(
           top: 8,
           right: 8,
@@ -538,8 +527,6 @@ class _VideoPreviewWithFilter extends StatelessWidget {
   }
 }
 
-/// CustomPainter que dibuja el overlay del filtro sobre el video
-/// usando las dimensiones reales del frame de video para escalar correctamente.
 class _VideoFilterOverlay extends StatelessWidget {
   final VideoPlayerController controller;
   final List<Face> faces;
@@ -560,26 +547,17 @@ class _VideoFilterOverlay extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final widgetSize =
-            Size(constraints.maxWidth, constraints.maxHeight);
-
-        // Calcular el área real del video dentro del widget (BoxFit.cover)
+        final widgetSize = Size(constraints.maxWidth, constraints.maxHeight);
         final videoAspect = videoSize.width / videoSize.height;
         final widgetAspect = widgetSize.width / widgetSize.height;
 
-        Size renderSize;
+        final Size renderSize;
         if (videoAspect > widgetAspect) {
-          // Video más ancho: ajustar por alto
-          renderSize = Size(
-            widgetSize.height * videoAspect,
-            widgetSize.height,
-          );
+          renderSize =
+              Size(widgetSize.height * videoAspect, widgetSize.height);
         } else {
-          // Video más alto: ajustar por ancho
-          renderSize = Size(
-            widgetSize.width,
-            widgetSize.width / videoAspect,
-          );
+          renderSize =
+              Size(widgetSize.width, widgetSize.width / videoAspect);
         }
 
         return CustomPaint(
@@ -617,7 +595,6 @@ class _VideoOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Centrar el área del video dentro del widget (BoxFit.cover)
     final dx = (widgetSize.width - renderSize.width) / 2;
     final dy = (widgetSize.height - renderSize.height) / 2;
 
@@ -627,7 +604,6 @@ class _VideoOverlayPainter extends CustomPainter {
       renderSize.width / frameSize.width,
       renderSize.height / frameSize.height,
     );
-
     for (final face in faces) {
       paintFilterOnFace(
         canvas: canvas,
@@ -636,7 +612,6 @@ class _VideoOverlayPainter extends CustomPainter {
         filterType: filterType,
       );
     }
-
     canvas.restore();
   }
 
@@ -714,7 +689,8 @@ class _UploadingView extends StatelessWidget {
   const _UploadingView({required this.progress, required this.isVideo});
 
   String get _statusText {
-    if (progress < 0.5) return 'Subiendo a Cloudinary...';
+    if (progress < 0.3) return 'Generando miniatura...';
+    if (progress < 0.6) return 'Subiendo a Cloudinary...';
     if (progress < 0.9) return 'Guardando en Firestore...';
     return '¡Casi listo!';
   }

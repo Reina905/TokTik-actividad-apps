@@ -22,6 +22,7 @@ class VideoRepository {
     required String cloudinaryUrl,
     required String caption,
     String? userId,
+    String? userName,
     String? thumbnailUrl,
     bool isVideo = true,
   }) async {
@@ -29,6 +30,7 @@ class VideoRepository {
       'cloudinaryUrl': cloudinaryUrl,
       'caption': caption,
       'userId': userId ?? 'anonimo',
+      'userName': userName ?? '',
       'thumbnailUrl': thumbnailUrl ?? '',
       'isVideo': isVideo,
       'likes': 0,
@@ -92,12 +94,16 @@ class VideoRepository {
 
   VideoPost _docToVideoPost(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
+    final rawUserName = data['userName'];
     return VideoPost(
       id: doc.id,
       caption: data['caption'] ?? '',
       videoUrl: data['cloudinaryUrl'] ?? '',
       thumbnailUrl: data['thumbnailUrl'],
       userId: data['userId'],
+      userName: (rawUserName is String && rawUserName.isNotEmpty)
+          ? rawUserName
+          : null,
       likes: (data['likes'] ?? 0) as int,
       views: (data['views'] ?? 0) as int,
       isVideo: data['isVideo'] ?? true,

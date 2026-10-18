@@ -89,6 +89,7 @@ class _VideoPageWithProfileState extends State<VideoPageWithProfile> {
         videoPage,
         CreatorProfileScreen(
           uid: authorUid,
+          fallbackName: videoPost.userName,
           onBack: () => _goToPage(0),
         ),
       ],

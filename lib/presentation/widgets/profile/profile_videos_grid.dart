@@ -17,8 +17,10 @@ class ProfileVideosGrid extends StatelessWidget {
           children: [
             Icon(Icons.videocam_off_outlined, size: 48, color: Colors.white38),
             SizedBox(height: 12),
-            Text('Todavía no hay videos',
-                style: TextStyle(color: Colors.white54)),
+            Text(
+              'Todavía no hay publicaciones',
+              style: TextStyle(color: Colors.white54),
+            ),
           ],
         ),
       );
@@ -53,30 +55,55 @@ class _VideoTile extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Miniatura
+        // ── Miniatura ─────────────────────────────────────────────────────
         if (hasThumbnail)
           Image.network(
             thumbnailUrl,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const _PlaceholderTile(),
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return _PlaceholderTile(isVideo: video.isVideo);
+            },
+            errorBuilder: (_, __, ___) =>
+                _PlaceholderTile(isVideo: video.isVideo),
           )
         else
-          const _PlaceholderTile(),
+          _PlaceholderTile(isVideo: video.isVideo),
 
-        // Gradiente inferior para que se lean las vistas
-        VideoBackground(stops: const [0.6, 1.0]),
+        // ── Gradiente inferior ────────────────────────────────────────────
+        VideoBackground(stops: const [0.55, 1.0]),
 
-        // Vistas
+        // ── Insignia de video (ícono de play en la esquina superior) ──────
+        if (video.isVideo)
+          const Positioned(
+            top: 6,
+            right: 6,
+            child: Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 18,
+              shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+            ),
+          ),
+
+        // ── Vistas ────────────────────────────────────────────────────────
         Positioned(
           left: 6,
           bottom: 6,
           child: Row(
             children: [
-              const Icon(Icons.play_arrow_outlined,
-                  size: 16, color: Colors.white),
+              Icon(
+                video.isVideo
+                    ? Icons.play_arrow_outlined
+                    : Icons.favorite_outline,
+                size: 14,
+                color: Colors.white,
+              ),
               const SizedBox(width: 2),
               Text(
-                HumanFormats.humanReadbleNumber(video.views.toDouble()),
+                HumanFormats.humanReadbleNumber(
+                  (video.isVideo ? video.views : video.likes).toDouble(),
+                ),
                 style: const TextStyle(fontSize: 12, color: Colors.white),
               ),
             ],
@@ -88,14 +115,22 @@ class _VideoTile extends StatelessWidget {
 }
 
 class _PlaceholderTile extends StatelessWidget {
-  const _PlaceholderTile();
+  final bool isVideo;
+  const _PlaceholderTile({required this.isVideo});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: Colors.white10,
-      child: const Icon(Icons.play_circle_outline,
-          color: Colors.white38, size: 36),
+      child: Center(
+        child: Icon(
+          isVideo
+              ? Icons.play_circle_outline
+              : Icons.image_outlined,
+          color: Colors.white24,
+          size: 36,
+        ),
+      ),
     );
   }
 }
