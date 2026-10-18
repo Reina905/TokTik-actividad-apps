@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:provider/provider.dart';
+import 'package:toktok/presentation/providers/auth_provider.dart';
+import 'package:toktok/presentation/providers/discover_provider.dart';
 import 'package:toktok/presentation/providers/upload_video_provider.dart';
 import 'package:toktok/presentation/widgets/filters/face_filter_utils.dart';
 import 'package:toktok/presentation/widgets/filters/filter_selector.dart';
@@ -88,22 +90,81 @@ class _UploadScreenState extends State<UploadScreen> {
     });
   }
 
+  // ── Renderizado de foto con filtro ────────────────────────────────────────
+
+  /// Renderiza la imagen con el filtro aplicado a un archivo temporal.
+  /// Devuelve null si no hay filtro o si falla (se sube el original).
+  Future<File?> _renderFilteredImage() async {
+    if (_selectedFilter == FaceFilterType.none || _decodedImage == null) {
+      return null;
+    }
+    try {
+      final image = _decodedImage!;
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+
+      // Pintar imagen + overlays del filtro a resolución original
+      final painter = StaticFilterPainter(
+        image: image,
+        faces: _faces,
+        filterAssets: _filterAssets,
+      );
+      painter.paint(
+        canvas,
+        Size(image.width.toDouble(), image.height.toDouble()),
+      );
+
+      final picture = recorder.endRecording();
+      final rendered = await picture.toImage(image.width, image.height);
+      final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return null;
+
+      final tempFile = File(
+        '${Directory.systemTemp.path}/'
+        'filtered_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await tempFile.writeAsBytes(byteData.buffer.asUint8List());
+      return tempFile;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final provider = context.read<UploadVideoProvider>();
-    final success = await provider.uploadFile(
-      file: widget.file,
+    // Guardar referencias antes de los async gaps
+    final uploadProvider = context.read<UploadVideoProvider>();
+    final userId = context.read<AuthProvider>().userId;
+    final discoverProvider = context.read<DiscoverProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    // Si es foto con filtro, renderizar la imagen con el filtro aplicado
+    File fileToUpload = widget.file;
+    if (!widget.isVideo && _selectedFilter != FaceFilterType.none) {
+      final rendered = await _renderFilteredImage();
+      if (rendered != null) {
+        fileToUpload = rendered;
+      }
+    }
+
+    final success = await uploadProvider.uploadFile(
+      file: fileToUpload,
       caption: _captionController.text.trim(),
       isVideo: widget.isVideo,
+      userId: userId,
     );
 
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Refrescar el feed para que aparezca el video/foto nuevo
+      discoverProvider.reload();
+
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             widget.isVideo
@@ -113,7 +174,7 @@ class _UploadScreenState extends State<UploadScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).pop();
+      navigator.pop();
     }
   }
 

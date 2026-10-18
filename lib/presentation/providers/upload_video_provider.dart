@@ -23,6 +23,7 @@ class UploadVideoProvider extends ChangeNotifier {
     required File file,
     required String caption,
     required bool isVideo,
+    String? userId,
   }) async {
     try {
       _status = UploadStatus.uploading;
@@ -49,6 +50,7 @@ class UploadVideoProvider extends ChangeNotifier {
         cloudinaryUrl: cloudinaryUrl,
         caption: caption,
         isVideo: isVideo,
+        userId: userId,
       );
 
       _progress = 1.0;

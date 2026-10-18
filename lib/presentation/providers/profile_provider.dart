@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:toktok/domain/entities/user_profile.dart';
 import 'package:toktok/domain/entities/video_post.dart';
 import 'package:toktok/infrastructure/repositories/profile_repository.dart';
+import 'package:toktok/infrastructure/repositories/video_repository.dart';
 
 class ProfileProvider extends ChangeNotifier {
   final ProfileRepository repository;
   final String uid; // uid del perfil que se está viendo
+  final VideoRepository? videoRepository;
 
   ProfileProvider({
     required this.repository,
     required this.uid,
+    this.videoRepository,
   });
 
   bool initialLoading = true;
@@ -30,11 +33,25 @@ class ProfileProvider extends ChangeNotifier {
       final result = await repository.getProfileByUid(uid);
 
       if (result == null) {
-        // Si hay un nombre de respaldo (perfil propio del navbar), se crea un
-        // perfil por defecto. Con LocalProfileDataSource los usuarios de
-        // Firebase no existen en los datos locales, así que se les crea uno
-        // vacío. Con Firestore esto no sería necesario: el perfil existiría.
-        if (fallbackName != null) {
+        // Usuario de Firebase que no está en los datos locales.
+        // Se intentan cargar sus videos subidos desde Firestore.
+        if (videoRepository != null) {
+          final userVideos = await videoRepository!.getVideosByUser(uid);
+          if (userVideos.isNotEmpty || fallbackName != null) {
+            profile = UserProfile(
+              uid: uid,
+              name: fallbackName ?? 'Usuario',
+              username: _usernameFromName(fallbackName ?? 'usuario'),
+              bio: '',
+              following: 0,
+              followers: 0,
+              likes: 0,
+            );
+            videos = userVideos;
+          } else {
+            errorMessage = 'Este usuario no existe';
+          }
+        } else if (fallbackName != null) {
           profile = UserProfile(
             uid: uid,
             name: fallbackName,
@@ -49,6 +66,7 @@ class ProfileProvider extends ChangeNotifier {
           errorMessage = 'Este usuario no existe';
         }
       } else {
+        // Creador local: sus videos vienen de los datos locales
         profile = result;
         videos = await repository.getVideosByUser(uid);
         isFollowing = await _checkFollowing(currentUid);

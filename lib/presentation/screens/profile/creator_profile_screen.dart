@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/infrastructure/repositories/profile_repository.dart';
+import 'package:toktok/infrastructure/repositories/video_repository.dart';
 import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/providers/profile_provider.dart';
 import 'package:toktok/presentation/widgets/auth/auth_popup.dart';
@@ -36,6 +37,7 @@ class CreatorProfileScreen extends StatelessWidget {
       create: (context) => ProfileProvider(
         repository: context.read<ProfileRepository>(),
         uid: uid,
+        videoRepository: context.read<VideoRepository>(),
       )..loadProfile(
           currentUid: context.read<AuthProvider>().userId,
           fallbackName: fallbackName,
