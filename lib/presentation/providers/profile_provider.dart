@@ -24,6 +24,12 @@ class ProfileProvider extends ChangeNotifier {
 
   bool _isDisposed = false;
 
+  /// Recarga el perfil completo (videos incluidos). Útil cuando el usuario
+  /// regresa al tab de perfil después de publicar contenido nuevo.
+  Future<void> reload({String? currentUid, String? fallbackName}) {
+    return loadProfile(currentUid: currentUid, fallbackName: fallbackName);
+  }
+
   Future<void> loadProfile({String? currentUid, String? fallbackName}) async {
     initialLoading = true;
     errorMessage = null;

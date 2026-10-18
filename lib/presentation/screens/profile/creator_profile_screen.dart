@@ -8,18 +8,10 @@ import 'package:toktok/presentation/widgets/auth/auth_popup.dart';
 import 'package:toktok/presentation/widgets/profile/profile_header.dart';
 import 'package:toktok/presentation/widgets/profile/profile_videos_grid.dart';
 
-class CreatorProfileScreen extends StatelessWidget {
+class CreatorProfileScreen extends StatefulWidget {
   final String uid;
-
-  // Qué hacer al tocar atras
   final VoidCallback? onBack;
-
-  // Mostrar o no el botón de retroceso. Cuando se abre desde el
-  // navbar (mi perfil) no aplica volver; desde un video sí.
   final bool showBackButton;
-
-  // Nombre de respaldo para crear un perfil por defecto cuando no
-  // existe en la fuente de datos (perfil propio desde el navbar).
   final String? fallbackName;
 
   const CreatorProfileScreen({
@@ -31,24 +23,58 @@ class CreatorProfileScreen extends StatelessWidget {
   });
 
   @override
+  State<CreatorProfileScreen> createState() => CreatorProfileScreenState();
+}
+
+class CreatorProfileScreenState extends State<CreatorProfileScreen> {
+  late ProfileProvider _profileProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileProvider = ProfileProvider(
+      repository: context.read<ProfileRepository>(),
+      uid: widget.uid,
+      videoRepository: context.read<VideoRepository>(),
+    );
+    _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _profileProvider.dispose();
+    super.dispose();
+  }
+
+  void _loadProfile() {
+    _profileProvider.loadProfile(
+      currentUid: context.read<AuthProvider>().userId,
+      fallbackName: widget.fallbackName,
+    );
+  }
+
+  /// Recarga el perfil completo desde Firestore.
+  /// Se llama desde [ProfileScreen] cuando el usuario toca el tab de perfil.
+  void reloadProfile() {
+    _profileProvider.reload(
+      currentUid: context.read<AuthProvider>().userId,
+      fallbackName: widget.fallbackName,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Un ProfileProvider nuevo por cada perfil que se abre
-    return ChangeNotifierProvider(
-      create: (context) => ProfileProvider(
-        repository: context.read<ProfileRepository>(),
-        uid: uid,
-        videoRepository: context.read<VideoRepository>(),
-      )..loadProfile(
-          currentUid: context.read<AuthProvider>().userId,
-          fallbackName: fallbackName,
-        ),
+    return ChangeNotifierProvider.value(
+      value: _profileProvider,
       child: _CreatorProfileView(
-        onBack: onBack,
-        showBackButton: showBackButton,
+        onBack: widget.onBack,
+        showBackButton: widget.showBackButton,
       ),
     );
   }
 }
+
+// ─── Vista del perfil ─────────────────────────────────────────────────────────
 
 class _CreatorProfileView extends StatelessWidget {
   final VoidCallback? onBack;
@@ -76,7 +102,7 @@ class _CreatorProfileView extends StatelessWidget {
                 onPressed: onBack ?? () => Navigator.maybePop(context),
               )
             : null,
-        // Botón de cerrar sesión solo en el perfil propio (navbar)
+        // Cerrar sesión solo en mi perfil (sin botón de atrás)
         actions: showBackButton
             ? null
             : [
@@ -123,7 +149,7 @@ class _CreatorProfileView extends StatelessWidget {
   }
 }
 
-// Botón Seguir o Editar perfil: lo decide la pantalla que usa este widget
+// ─── Botón seguir ─────────────────────────────────────────────────────────────
 
 class _FollowButton extends StatelessWidget {
   const _FollowButton();
@@ -133,7 +159,7 @@ class _FollowButton extends StatelessWidget {
     final profileProvider = context.watch<ProfileProvider>();
     final authProvider = context.watch<AuthProvider>();
 
-    // Si el perfil es el mío, no tiene sentido seguirme
+    // En mi propio perfil no aparece el botón
     if (authProvider.userId == profileProvider.uid) {
       return const SizedBox.shrink();
     }
@@ -147,7 +173,6 @@ class _FollowButton extends StatelessWidget {
       child: FilledButton(
         onPressed: profileProvider.isFollowLoading
             ? null
-            // Seguir requiere sesión: si no hay, se abre el pop-up de login
             : () => requireAuth(
                   context,
                   onAuthenticated: () => profileProvider.toggleFollow(
@@ -158,21 +183,30 @@ class _FollowButton extends StatelessWidget {
           backgroundColor: buttonColor,
           disabledBackgroundColor: buttonColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         child: profileProvider.isFollowLoading
             ? const SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
               )
             : Text(isFollowing ? 'Siguiendo' : 'Seguir'),
       ),
     );
   }
 }
+
+// ─── Tab bar de videos ────────────────────────────────────────────────────────
 
 class _VideosTabBar extends StatelessWidget {
   const _VideosTabBar();
@@ -181,7 +215,9 @@ class _VideosTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white12, width: 0.5)),
+        border: Border(
+          bottom: BorderSide(color: Colors.white12, width: 0.5),
+        ),
       ),
       child: Row(
         children: [
@@ -189,8 +225,9 @@ class _VideosTabBar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: const BoxDecoration(
-                border:
-                    Border(bottom: BorderSide(color: Colors.white, width: 2)),
+                border: Border(
+                  bottom: BorderSide(color: Colors.white, width: 2),
+                ),
               ),
               child: const Icon(Icons.grid_on, color: Colors.white, size: 22),
             ),

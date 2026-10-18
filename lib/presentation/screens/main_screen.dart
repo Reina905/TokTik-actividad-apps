@@ -20,17 +20,30 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    DiscoverScreen(),   // 0 = Descubrir (home)
-    FeedScreen(),       // 1 = Feed
-    SizedBox.shrink(),  // 2 = botón +, sin pantalla
-    ProfileScreen(),    // 3 = Perfil
-  ];
+  // GlobalKey para acceder al State de ProfileScreen y llamar refresh()
+  final _profileKey = GlobalKey<ProfileScreenState>();
+
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      const DiscoverScreen(),  // 0 = Descubrir (home)
+      const FeedScreen(),      // 1 = Feed
+      const SizedBox.shrink(), // 2 = botón +, sin pantalla
+      ProfileScreen(key: _profileKey), // 3 = Perfil
+    ];
+  }
 
   void _onTabTap(int index) {
     if (index == 2) {
       _showAddContentModal();
       return;
+    }
+    // Al volver al perfil, recargar videos para mostrar publicaciones nuevas
+    if (index == 3) {
+      _profileKey.currentState?.refresh();
     }
     setState(() => _currentIndex = index);
   }
@@ -47,13 +60,14 @@ class _MainScreenState extends State<MainScreen> {
       builder: (_) => _AddContentSheet(
         onVideoCamera: () async {
           Navigator.pop(context);
-          // Abre la cámara en vivo con filtros
-          Navigator.push(
+          // Abre la cámara en vivo con filtros; al volver recarga el perfil
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => const CameraFilterScreen(),
             ),
           );
+          _profileKey.currentState?.refresh();
         },
         onGallery: () {
           Navigator.pop(context);
@@ -116,7 +130,7 @@ class _MainScreenState extends State<MainScreen> {
 
     context.read<UploadVideoProvider>().reset();
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => UploadScreen(
@@ -125,6 +139,8 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
     );
+    // Al volver de UploadScreen, recargar el perfil por si se publicó algo
+    if (mounted) _profileKey.currentState?.refresh();
   }
 
   @override

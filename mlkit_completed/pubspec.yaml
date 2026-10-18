@@ -1,0 +1,28 @@
+name: clase24_mlkit_demo
+description: "App de ejemplo para la Clase 24 (Semana 8): ML Kit on-device — reconocimiento de texto e imagen, detección de rostros, y un filtro facial (lentes/bigote) construido sobre los landmarks del FaceDetector."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_image_labeling: ^0.14.1
+  google_mlkit_face_detection: ^0.13.1
+  image_picker: ^1.1.2
+  cupertino_icons: ^1.0.6
+  camera: ^0.12.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/filtros/glasses.png
+    - assets/filtros/bigote.png
