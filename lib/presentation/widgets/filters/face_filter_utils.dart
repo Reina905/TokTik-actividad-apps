@@ -55,18 +55,31 @@ void paintFilterOnFace({
   required FaceFilterAssets assets,
   required FaceFilterType filterType,
 }) {
+  final box = face.boundingBox;
   final leftEye = face.landmarks[FaceLandmarkType.leftEye]?.position;
   final rightEye = face.landmarks[FaceLandmarkType.rightEye]?.position;
   final noseBase = face.landmarks[FaceLandmarkType.noseBase]?.position;
-  final leftMouth = face.landmarks[FaceLandmarkType.leftMouth]?.position;
-  final rightMouth = face.landmarks[FaceLandmarkType.rightMouth]?.position;
+  var leftMouth = face.landmarks[FaceLandmarkType.leftMouth]?.position;
+  var rightMouth = face.landmarks[FaceLandmarkType.rightMouth]?.position;
   final leftEar = face.landmarks[FaceLandmarkType.leftEar]?.position;
   final rightEar = face.landmarks[FaceLandmarkType.rightEar]?.position;
 
-  if (leftEye == null || rightEye == null) return;
-
-  final eyeLeft = Offset(leftEye.x.toDouble(), leftEye.y.toDouble());
-  final eyeRight = Offset(rightEye.x.toDouble(), rightEye.y.toDouble());
+  // Si ML Kit no da landmarks, estimamos ojos y boca con el bounding box
+  // para que el filtro no desaparezca en video.
+  final eyeLeft = leftEye != null
+      ? Offset(leftEye.x.toDouble(), leftEye.y.toDouble())
+      : Offset(box.left + box.width * 0.3, box.top + box.height * 0.38);
+  final eyeRight = rightEye != null
+      ? Offset(rightEye.x.toDouble(), rightEye.y.toDouble())
+      : Offset(box.left + box.width * 0.7, box.top + box.height * 0.38);
+  leftMouth ??= math.Point(
+    (box.left + box.width * 0.35).round(),
+    (box.top + box.height * 0.75).round(),
+  );
+  rightMouth ??= math.Point(
+    (box.left + box.width * 0.65).round(),
+    (box.top + box.height * 0.75).round(),
+  );
   final eyeDistance = (eyeRight - eyeLeft).distance;
   final eyeCenter = (eyeLeft + eyeRight) / 2;
 

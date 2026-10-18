@@ -56,6 +56,9 @@ class _UploadScreenState extends State<UploadScreen> {
   Size? _frameSize;
   bool _isFrontCamera = false;
   bool _isProcessingVideo = false;
+  double _processProgress = 0;
+  VideoFaceTrack? _videoTrack;
+  Future<void>? _analysisFuture;
 
   // ── Video preview ─────────────────────────────────────────────────────────
   VideoPlayerController? _videoController;
@@ -73,12 +76,16 @@ class _UploadScreenState extends State<UploadScreen> {
       ),
     );
 
-    // Aplicar filtro inicial si viene desde la cámara con filtro activo
+    // Aplicar filtro inicial si viene desde la cámara con filtro activo.
+    // En video NO reutilizamos los rostros del último frame de la cámara:
+    // esas coordenadas se congelarían en pantalla. Se reanaliza el archivo.
     _selectedFilter = widget.initialFilter;
     _filterAssets = widget.initialFilterAssets;
-    _faces = List<Face>.from(widget.initialFaces);
-    _frameSize = widget.initialFrameSize;
     _isFrontCamera = widget.isFrontCamera;
+    if (!widget.isVideo) {
+      _faces = List<Face>.from(widget.initialFaces);
+      _frameSize = widget.initialFrameSize;
+    }
 
     if (widget.isVideo) {
       _initVideoPlayer();
@@ -91,7 +98,9 @@ class _UploadScreenState extends State<UploadScreen> {
   void dispose() {
     _captionController.dispose();
     _faceDetector.close();
+    _videoController?.removeListener(_onVideoTick);
     _videoController?.dispose();
+    _videoTrack?.dispose();
     super.dispose();
   }
 
@@ -109,54 +118,39 @@ class _UploadScreenState extends State<UploadScreen> {
     await controller.seekTo(Duration.zero);
     setState(() => _videoInitialized = true);
     controller.setLooping(true);
-
-    // Solo detectar rostros si no vienen pre-detectados desde la cámara
-    if (_faces.isEmpty) {
-      // Esperar un frame para que el VideoPlayer renderice antes de capturar
-      await Future.delayed(const Duration(milliseconds: 300));
-      await _detectFacesInVideoFrame();
-    }
+    controller.addListener(_onVideoTick);
+    _analysisFuture = _analyzeVideoFaces();
 
     if (mounted) controller.play();
   }
 
-  /// Extrae el primer frame del video con FFmpeg, lo pasa a ML Kit para
-  /// detectar rostros, y asigna [_frameSize] con las dimensiones reales
-  /// del video (no del widget en pantalla).
-  Future<void> _detectFacesInVideoFrame() async {
+  void _onVideoTick() {
+    final track = _videoTrack;
+    final controller = _videoController;
+    if (track == null || controller == null || !mounted) return;
+    final faces = track.facesAt(controller.value.position);
+    if (identical(faces, _faces)) return;
+    setState(() => _faces = faces);
+  }
+
+  Future<void> _analyzeVideoFaces() async {
+    if (!widget.isVideo) return;
     setState(() => _isDetecting = true);
     try {
-      // Extraer el primer frame del video como PNG usando FFmpeg.
-      // Esto garantiza que las dimensiones del frame coinciden exactamente
-      // con las del video, lo cual es esencial para escalar el overlay.
-      final frameFile = await VideoFilterService.extractFirstFrame(widget.file);
-      if (frameFile == null || !mounted) {
-        setState(() => _isDetecting = false);
-        return;
-      }
-
-      // Leer dimensiones reales del frame extraído
-      final bytes = await frameFile.readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final realWidth = frame.image.width.toDouble();
-      final realHeight = frame.image.height.toDouble();
-      frame.image.dispose();
-
-      final inputImage = InputImage.fromFile(frameFile);
-      final faces = await _faceDetector.processImage(inputImage);
-
-      // Limpiar el frame temporal
-      try { await frameFile.delete(); } catch (_) {}
-
+      final track = await VideoFilterService.analyzeVideo(widget.file);
       if (!mounted) return;
+      if (track == null) _analysisFuture = null;
       setState(() {
-        _faces = faces;
-        // frameSize en coordenadas del frame real del video — igual al video
-        _frameSize = Size(realWidth, realHeight);
+        _videoTrack = track;
+        _frameSize = track?.frameSize;
+        _faces = track?.facesAt(
+              _videoController?.value.position ?? Duration.zero,
+            ) ??
+            [];
         _isDetecting = false;
       });
     } catch (_) {
+      _analysisFuture = null;
       if (mounted) setState(() => _isDetecting = false);
     }
   }
@@ -189,7 +183,19 @@ class _UploadScreenState extends State<UploadScreen> {
     setState(() {
       _selectedFilter = type;
       _filterAssets = assets;
+      if (type == FaceFilterType.none) _faces = [];
     });
+    if (widget.isVideo && type != FaceFilterType.none && _videoTrack == null) {
+      _analysisFuture ??= _analyzeVideoFaces();
+    }
+    if (widget.isVideo && type != FaceFilterType.none && _videoTrack != null) {
+      setState(() {
+        _faces = _videoTrack!.facesAt(
+          _videoController?.value.position ?? Duration.zero,
+        );
+        _frameSize = _videoTrack!.frameSize;
+      });
+    }
   }
 
   // ── Renderizado de foto con filtro ────────────────────────────────────────
@@ -252,25 +258,28 @@ class _UploadScreenState extends State<UploadScreen> {
       final rendered = await _renderFilteredImage();
       if (rendered != null) fileToUpload = rendered;
     } else if (widget.isVideo && _selectedFilter != FaceFilterType.none) {
-      // Video: usar FFmpeg para quemar el overlay del filtro en el video
-      final videoCtrl = _videoController;
-      final videoSize = videoCtrl?.value.size;
-      final frameSize = _frameSize;
-
-      if (videoSize != null && frameSize != null && _faces.isNotEmpty) {
-        setState(() => _isProcessingVideo = true);
-        fileToUpload = await VideoFilterService.applyFilterToVideo(
-          inputVideo: widget.file,
-          faces: _faces,
-          filterAssets: _filterAssets,
-          filterType: _selectedFilter,
-          videoWidth: videoSize.width.round(),
-          videoHeight: videoSize.height.round(),
-          frameSize: frameSize,
-          mirror: _isFrontCamera,
-        );
-        if (mounted) setState(() => _isProcessingVideo = false);
-      }
+      setState(() {
+        _isProcessingVideo = true;
+        _processProgress = 0;
+      });
+      await _analysisFuture;
+      if (!mounted) return;
+      final videoSize = _videoController?.value.size;
+      fileToUpload = await VideoFilterService.applyFilterToVideo(
+        inputVideo: widget.file,
+        filterAssets: _filterAssets,
+        filterType: _selectedFilter,
+        track: _videoTrack,
+        faces: _faces,
+        videoWidth: videoSize?.width.round(),
+        videoHeight: videoSize?.height.round(),
+        frameSize: _frameSize ?? videoSize,
+        mirror: _isFrontCamera,
+        onProgress: (progress) {
+          if (mounted) setState(() => _processProgress = progress);
+        },
+      );
+      if (mounted) setState(() => _isProcessingVideo = false);
     }
 
     // 2. Subir el archivo principal a Cloudinary y guardar en Firestore.
@@ -323,7 +332,7 @@ class _UploadScreenState extends State<UploadScreen> {
       body: provider.isUploading
           ? _UploadingView(progress: provider.progress, isVideo: widget.isVideo)
           : _isProcessingVideo
-              ? const _ProcessingVideoView()
+              ? _ProcessingVideoView(progress: _processProgress)
               : _FormView(
               captionController: _captionController,
               formKey: _formKey,
@@ -338,6 +347,7 @@ class _UploadScreenState extends State<UploadScreen> {
               videoController: _videoController,
               videoInitialized: _videoInitialized,
               videoFrameKey: _videoFrameKey,
+              overlayFrameSize: _frameSize,
               errorMessage: provider.errorMessage,
               onSubmit: _submit,
             ),
@@ -361,6 +371,7 @@ class _FormView extends StatelessWidget {
   final VideoPlayerController? videoController;
   final bool videoInitialized;
   final GlobalKey videoFrameKey;
+  final Size? overlayFrameSize;
   final String? errorMessage;
   final VoidCallback onSubmit;
 
@@ -378,6 +389,7 @@ class _FormView extends StatelessWidget {
     required this.videoController,
     required this.videoInitialized,
     required this.videoFrameKey,
+    required this.overlayFrameSize,
     required this.errorMessage,
     required this.onSubmit,
   });
@@ -407,6 +419,7 @@ class _FormView extends StatelessWidget {
                         selectedFilter: selectedFilter,
                         isDetecting: isDetecting,
                         frameKey: videoFrameKey,
+                        overlayFrameSize: overlayFrameSize,
                       )
                     : _PhotoPreview(
                         file: file,
@@ -429,7 +442,7 @@ class _FormView extends StatelessWidget {
             if (isVideo) ...[
               const SizedBox(height: 8),
               const Text(
-                'El filtro se quema en el video antes de publicar.',
+                'El filtro sigue el rostro a lo largo del video al publicar.',
                 style: TextStyle(color: Colors.white38, fontSize: 11),
                 textAlign: TextAlign.center,
               ),
@@ -527,6 +540,7 @@ class _VideoPreviewWithFilter extends StatelessWidget {
   final FaceFilterType selectedFilter;
   final bool isDetecting;
   final GlobalKey frameKey;
+  final Size? overlayFrameSize;
 
   const _VideoPreviewWithFilter({
     required this.file,
@@ -537,6 +551,7 @@ class _VideoPreviewWithFilter extends StatelessWidget {
     required this.selectedFilter,
     required this.isDetecting,
     required this.frameKey,
+    required this.overlayFrameSize,
   });
 
   @override
@@ -565,12 +580,15 @@ class _VideoPreviewWithFilter extends StatelessWidget {
             ),
           ),
         ),
-        if (selectedFilter != FaceFilterType.none && faces.isNotEmpty)
+        if (selectedFilter != FaceFilterType.none &&
+            faces.isNotEmpty &&
+            overlayFrameSize != null)
           _VideoFilterOverlay(
             controller: controller!,
             faces: faces,
             filterAssets: filterAssets,
             selectedFilter: selectedFilter,
+            overlayFrameSize: overlayFrameSize!,
           ),
         if (isDetecting)
           Positioned(
@@ -586,7 +604,7 @@ class _VideoPreviewWithFilter extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  'Detectando rostros...',
+                  'Siguiendo el rostro en el video...',
                   style: TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               ),
@@ -614,12 +632,14 @@ class _VideoFilterOverlay extends StatelessWidget {
   final List<Face> faces;
   final FaceFilterAssets filterAssets;
   final FaceFilterType selectedFilter;
+  final Size overlayFrameSize;
 
   const _VideoFilterOverlay({
     required this.controller,
     required this.faces,
     required this.filterAssets,
     required this.selectedFilter,
+    required this.overlayFrameSize,
   });
 
   @override
@@ -646,7 +666,7 @@ class _VideoFilterOverlay extends StatelessWidget {
           size: widgetSize,
           painter: _VideoOverlayPainter(
             faces: faces,
-            frameSize: videoSize,
+            frameSize: overlayFrameSize,
             renderSize: renderSize,
             widgetSize: widgetSize,
             filterAssets: filterAssets,
@@ -700,6 +720,7 @@ class _VideoOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _VideoOverlayPainter old) {
     return old.faces != faces ||
+        old.frameSize != frameSize ||
         old.filterType != filterType ||
         old.filterAssets != filterAssets;
   }
@@ -821,29 +842,37 @@ class _UploadingView extends StatelessWidget {
 // ─── Vista de procesamiento de video con filtro ───────────────────────────────
 
 class _ProcessingVideoView extends StatelessWidget {
-  const _ProcessingVideoView();
+  final double progress;
+  const _ProcessingVideoView({required this.progress});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(40),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_fix_high, color: Colors.white54, size: 64),
-            SizedBox(height: 24),
-            Text(
+            const Icon(Icons.auto_fix_high, color: Colors.white54, size: 64),
+            const SizedBox(height: 24),
+            const Text(
               'Aplicando filtro al video...',
               style: TextStyle(color: Colors.white, fontSize: 16),
             ),
-            SizedBox(height: 24),
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation(Color(0xFFEE1D52)),
+            const SizedBox(height: 24),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progress <= 0 ? null : progress.clamp(0, 1),
+                minHeight: 8,
+                backgroundColor: Colors.white12,
+                valueColor:
+                    const AlwaysStoppedAnimation(Color(0xFFEE1D52)),
+              ),
             ),
-            SizedBox(height: 16),
-            Text(
-              'Esto puede tardar unos segundos',
+            const SizedBox(height: 16),
+            const Text(
+              'El filtro sigue el rostro en cada fotograma',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
