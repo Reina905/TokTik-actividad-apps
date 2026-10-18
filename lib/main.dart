@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/config/theme/app_theme.dart';
+import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/providers/discover_provider.dart';
 import 'package:toktok/presentation/screens/main_screen.dart';
 
@@ -16,6 +17,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           lazy: false,
           create: (_) => DiscoverProvider()..loadNextPage(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(),
         ),
       ],
       child: MaterialApp(
