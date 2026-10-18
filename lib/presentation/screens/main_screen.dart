@@ -73,12 +73,6 @@ class _MainScreenState extends State<MainScreen> {
           Navigator.pop(context);
           _showGalleryPicker();
         },
-        onLive: () {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('En vivo próximamente')),
-          );
-        },
       ),
     );
   }
@@ -158,17 +152,15 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ─── Modal principal: Video | Galería | En vivo ───────────────────────────────
+// ─── Modal principal: Video | Galería ────────────────────────────────────────
 
 class _AddContentSheet extends StatelessWidget {
   final VoidCallback onVideoCamera;
   final VoidCallback onGallery;
-  final VoidCallback onLive;
 
   const _AddContentSheet({
     required this.onVideoCamera,
     required this.onGallery,
-    required this.onLive,
   });
 
   @override
@@ -208,11 +200,6 @@ class _AddContentSheet extends StatelessWidget {
                 icon: Icons.photo_library_outlined,
                 label: 'Galería',
                 onTap: onGallery,
-              ),
-              _OptionTile(
-                icon: Icons.live_tv_outlined,
-                label: 'En vivo',
-                onTap: onLive,
               ),
             ],
           ),
