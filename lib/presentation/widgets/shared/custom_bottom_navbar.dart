@@ -26,34 +26,34 @@ class CustomBottomNavbar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Feed
+              // Índice 0 — Inicio (Discover)
               _NavItem(
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home,
-                label: 'Home',
+                label: 'Inicio',
                 isActive: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
-              
+
+              // Índice 1 — Feed
               _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
+                icon: Icons.play_circle_outline,
+                activeIcon: Icons.play_circle,
                 label: 'Feed',
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
-        ),
+              ),
 
+              // Índice 2 — Botón + (abre modal, sin pantalla propia)
+              _AddButton(onTap: () => onTap(2)),
 
-              // Botón de más (central)
-              _AddButton(onTap: () => onTap(1)),
-
-              // Perfil
+              // Índice 3 — Perfil
               _NavItem(
                 icon: Icons.person_outline,
                 activeIcon: Icons.person,
                 label: 'Perfil',
-                isActive: currentIndex == 2,
-                onTap: () => onTap(2),
+                isActive: currentIndex == 3,
+                onTap: () => onTap(3),
               ),
             ],
           ),
@@ -138,7 +138,7 @@ class _AddButton extends StatelessWidget {
               width: 40,
               height: 30,
               decoration: BoxDecoration(
-                color: const Color(0xFFEE1D52), // rojo TikTok
+                color: const Color(0xFFEE1D52),
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -150,7 +150,7 @@ class _AddButton extends StatelessWidget {
               width: 40,
               height: 30,
               decoration: BoxDecoration(
-                color: const Color(0xFF69C9D0), // cian TikTok
+                color: const Color(0xFF69C9D0),
                 borderRadius: BorderRadius.circular(8),
               ),
             ),

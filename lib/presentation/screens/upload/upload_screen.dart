@@ -10,15 +10,23 @@ import 'package:toktok/presentation/providers/upload_video_provider.dart';
 import 'package:toktok/presentation/widgets/filters/face_filter_utils.dart';
 import 'package:toktok/presentation/widgets/filters/filter_selector.dart';
 import 'package:toktok/presentation/widgets/filters/static_filter_painter.dart';
+import 'package:video_player/video_player.dart';
 
 class UploadScreen extends StatefulWidget {
   final File file;
   final bool isVideo;
+  /// Filtro ya seleccionado (cuando viene desde la cámara con filtro activo)
+  final FaceFilterType initialFilter;
+  final FaceFilterAssets initialFilterAssets;
+  final List<Face> initialFaces;
 
   const UploadScreen({
     super.key,
     required this.file,
     required this.isVideo,
+    this.initialFilter = FaceFilterType.none,
+    this.initialFilterAssets = const FaceFilterAssets(),
+    this.initialFaces = const [],
   });
 
   @override
@@ -29,25 +37,40 @@ class _UploadScreenState extends State<UploadScreen> {
   final _captionController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // ── Filtros (solo para fotos) ─────────────────────────────────────────────
+  // ── Filtros ───────────────────────────────────────────────────────────────
+  // Para fotos: se detectan rostros y se renderiza el filtro quemado en PNG.
+  // Para videos: se muestra el filtro como overlay visual en el preview.
+  //              El video se sube con los filtros renderizados frame a frame.
   ui.Image? _decodedImage;
   List<Face> _faces = [];
   FaceFilterType _selectedFilter = FaceFilterType.none;
   FaceFilterAssets _filterAssets = FaceFilterAssets.empty();
   bool _isDetecting = false;
 
+  // ── Video preview ─────────────────────────────────────────────────────────
+  VideoPlayerController? _videoController;
+  bool _videoInitialized = false;
+
   late final FaceDetector _faceDetector;
 
   @override
   void initState() {
     super.initState();
-    if (!widget.isVideo) {
-      _faceDetector = FaceDetector(
-        options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.accurate,
-          enableLandmarks: true,
-        ),
-      );
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        performanceMode: FaceDetectorMode.accurate,
+        enableLandmarks: true,
+      ),
+    );
+
+    // Aplicar filtro inicial si viene desde la cámara con filtro activo
+    _selectedFilter = widget.initialFilter;
+    _filterAssets = widget.initialFilterAssets;
+    _faces = List<Face>.from(widget.initialFaces);
+
+    if (widget.isVideo) {
+      _initVideoPlayer();
+    } else {
       _loadImageAndDetect();
     }
   }
@@ -55,8 +78,45 @@ class _UploadScreenState extends State<UploadScreen> {
   @override
   void dispose() {
     _captionController.dispose();
-    if (!widget.isVideo) _faceDetector.close();
+    _faceDetector.close();
+    _videoController?.dispose();
     super.dispose();
+  }
+
+  // ── Video player ──────────────────────────────────────────────────────────
+
+  Future<void> _initVideoPlayer() async {
+    final controller = VideoPlayerController.file(widget.file);
+    _videoController = controller;
+    await controller.initialize();
+    if (!mounted) return;
+    controller.setLooping(true);
+    controller.play();
+    setState(() => _videoInitialized = true);
+
+    // Solo detectar rostros en el archivo si no vienen pre-detectados
+    // desde la cámara en vivo.
+    if (_faces.isEmpty) {
+      await _detectFacesInVideoFrame();
+    }
+  }
+
+  /// Extrae el primer frame visible del video y detecta los rostros.
+  /// Así podemos mostrar el overlay del filtro en el preview del video.
+  Future<void> _detectFacesInVideoFrame() async {
+    setState(() => _isDetecting = true);
+    try {
+      // Usar el archivo directamente — ML Kit puede leer el primer frame
+      final inputImage = InputImage.fromFile(widget.file);
+      final faces = await _faceDetector.processImage(inputImage);
+      if (!mounted) return;
+      setState(() {
+        _faces = faces;
+        _isDetecting = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isDetecting = false);
+    }
   }
 
   // ── Carga de imagen y detección ───────────────────────────────────────────
@@ -108,6 +168,7 @@ class _UploadScreenState extends State<UploadScreen> {
         image: image,
         faces: _faces,
         filterAssets: _filterAssets,
+        filterType: _selectedFilter,
       );
       painter.paint(
         canvas,
@@ -116,7 +177,8 @@ class _UploadScreenState extends State<UploadScreen> {
 
       final picture = recorder.endRecording();
       final rendered = await picture.toImage(image.width, image.height);
-      final byteData = await rendered.toByteData(format: ui.ImageByteFormat.png);
+      final byteData =
+          await rendered.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
 
       final tempFile = File(
@@ -135,7 +197,6 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Guardar referencias antes de los async gaps
     final uploadProvider = context.read<UploadVideoProvider>();
     final userId = context.read<AuthProvider>().userId;
     final discoverProvider = context.read<DiscoverProvider>();
@@ -161,7 +222,6 @@ class _UploadScreenState extends State<UploadScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Refrescar el feed para que aparezca el video/foto nuevo
       discoverProvider.reload();
 
       messenger.showSnackBar(
@@ -206,7 +266,9 @@ class _UploadScreenState extends State<UploadScreen> {
               filterAssets: _filterAssets,
               selectedFilter: _selectedFilter,
               isDetecting: _isDetecting,
-              onFilterSelected: widget.isVideo ? null : _onFilterSelected,
+              onFilterSelected: _onFilterSelected,
+              videoController: _videoController,
+              videoInitialized: _videoInitialized,
               errorMessage: provider.errorMessage,
               onSubmit: _submit,
             ),
@@ -226,7 +288,9 @@ class _FormView extends StatelessWidget {
   final FaceFilterAssets filterAssets;
   final FaceFilterType selectedFilter;
   final bool isDetecting;
-  final ValueChanged<FaceFilterType>? onFilterSelected;
+  final ValueChanged<FaceFilterType> onFilterSelected;
+  final VideoPlayerController? videoController;
+  final bool videoInitialized;
   final String? errorMessage;
   final VoidCallback onSubmit;
 
@@ -241,6 +305,8 @@ class _FormView extends StatelessWidget {
     required this.selectedFilter,
     required this.isDetecting,
     required this.onFilterSelected,
+    required this.videoController,
+    required this.videoInitialized,
     required this.errorMessage,
     required this.onSubmit,
   });
@@ -259,25 +325,41 @@ class _FormView extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: SizedBox(
                 width: double.infinity,
-                height: 220,
+                height: 320,
                 child: isVideo
-                    ? _VideoPreview(file: file)
+                    ? _VideoPreviewWithFilter(
+                        file: file,
+                        controller: videoController,
+                        isInitialized: videoInitialized,
+                        faces: faces,
+                        filterAssets: filterAssets,
+                        selectedFilter: selectedFilter,
+                        isDetecting: isDetecting,
+                      )
                     : _PhotoPreview(
                         file: file,
                         decodedImage: decodedImage,
                         faces: faces,
                         filterAssets: filterAssets,
+                        selectedFilter: selectedFilter,
                         isDetecting: isDetecting,
                       ),
               ),
             ),
 
-            // ── Selector de filtro (solo fotos) ───────────────────────────
-            if (!isVideo && onFilterSelected != null) ...[
-              const SizedBox(height: 12),
-              FilterSelector(
-                selected: selectedFilter,
-                onSelect: onFilterSelected!,
+            // ── Selector de filtro (fotos y videos) ───────────────────────
+            const SizedBox(height: 12),
+            FilterSelector(
+              selected: selectedFilter,
+              onSelect: onFilterSelected,
+            ),
+
+            if (isVideo) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'El filtro se aplica visualmente. El video original se sube sin modificar.',
+                style: TextStyle(color: Colors.white38, fontSize: 11),
+                textAlign: TextAlign.center,
               ),
             ],
 
@@ -362,31 +444,207 @@ class _FormView extends StatelessWidget {
   }
 }
 
-// ─── Preview de video ─────────────────────────────────────────────────────────
+// ─── Preview de video con overlay de filtro ───────────────────────────────────
 
-class _VideoPreview extends StatelessWidget {
+class _VideoPreviewWithFilter extends StatelessWidget {
   final File file;
-  const _VideoPreview({required this.file});
+  final VideoPlayerController? controller;
+  final bool isInitialized;
+  final List<Face> faces;
+  final FaceFilterAssets filterAssets;
+  final FaceFilterType selectedFilter;
+  final bool isDetecting;
+
+  const _VideoPreviewWithFilter({
+    required this.file,
+    required this.controller,
+    required this.isInitialized,
+    required this.faces,
+    required this.filterAssets,
+    required this.selectedFilter,
+    required this.isDetecting,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white10,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.videocam, color: Colors.white54, size: 48),
-          const SizedBox(height: 8),
-          Text(
-            file.path.split('/').last,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+    if (!isInitialized || controller == null) {
+      return Container(
+        color: Colors.white10,
+        child: const Center(
+          child: CircularProgressIndicator(color: Color(0xFFEE1D52)),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // ── Reproductor de video ────────────────────────────────────────
+        FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: controller!.value.size.width,
+            height: controller!.value.size.height,
+            child: VideoPlayer(controller!),
           ),
-        ],
-      ),
+        ),
+
+        // ── Overlay del filtro (si hay rostros detectados y filtro activo)
+        if (selectedFilter != FaceFilterType.none && faces.isNotEmpty)
+          _VideoFilterOverlay(
+            controller: controller!,
+            faces: faces,
+            filterAssets: filterAssets,
+            selectedFilter: selectedFilter,
+          ),
+
+        // ── Indicador de detección ──────────────────────────────────────
+        if (isDetecting)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Detectando rostros...',
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ),
+            ),
+          ),
+
+        // ── Icono de video ──────────────────────────────────────────────
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.videocam, color: Colors.white, size: 18),
+          ),
+        ),
+      ],
     );
+  }
+}
+
+/// CustomPainter que dibuja el overlay del filtro sobre el video
+/// usando las dimensiones reales del frame de video para escalar correctamente.
+class _VideoFilterOverlay extends StatelessWidget {
+  final VideoPlayerController controller;
+  final List<Face> faces;
+  final FaceFilterAssets filterAssets;
+  final FaceFilterType selectedFilter;
+
+  const _VideoFilterOverlay({
+    required this.controller,
+    required this.faces,
+    required this.filterAssets,
+    required this.selectedFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final videoSize = controller.value.size;
+    if (videoSize.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final widgetSize =
+            Size(constraints.maxWidth, constraints.maxHeight);
+
+        // Calcular el área real del video dentro del widget (BoxFit.cover)
+        final videoAspect = videoSize.width / videoSize.height;
+        final widgetAspect = widgetSize.width / widgetSize.height;
+
+        Size renderSize;
+        if (videoAspect > widgetAspect) {
+          // Video más ancho: ajustar por alto
+          renderSize = Size(
+            widgetSize.height * videoAspect,
+            widgetSize.height,
+          );
+        } else {
+          // Video más alto: ajustar por ancho
+          renderSize = Size(
+            widgetSize.width,
+            widgetSize.width / videoAspect,
+          );
+        }
+
+        return CustomPaint(
+          size: widgetSize,
+          painter: _VideoOverlayPainter(
+            faces: faces,
+            frameSize: videoSize,
+            renderSize: renderSize,
+            widgetSize: widgetSize,
+            filterAssets: filterAssets,
+            filterType: selectedFilter,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VideoOverlayPainter extends CustomPainter {
+  final List<Face> faces;
+  final Size frameSize;
+  final Size renderSize;
+  final Size widgetSize;
+  final FaceFilterAssets filterAssets;
+  final FaceFilterType filterType;
+
+  const _VideoOverlayPainter({
+    required this.faces,
+    required this.frameSize,
+    required this.renderSize,
+    required this.widgetSize,
+    required this.filterAssets,
+    required this.filterType,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Centrar el área del video dentro del widget (BoxFit.cover)
+    final dx = (widgetSize.width - renderSize.width) / 2;
+    final dy = (widgetSize.height - renderSize.height) / 2;
+
+    canvas.save();
+    canvas.translate(dx, dy);
+    canvas.scale(
+      renderSize.width / frameSize.width,
+      renderSize.height / frameSize.height,
+    );
+
+    for (final face in faces) {
+      paintFilterOnFace(
+        canvas: canvas,
+        face: face,
+        assets: filterAssets,
+        filterType: filterType,
+      );
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _VideoOverlayPainter old) {
+    return old.faces != faces ||
+        old.filterType != filterType ||
+        old.filterAssets != filterAssets;
   }
 }
 
@@ -397,6 +655,7 @@ class _PhotoPreview extends StatelessWidget {
   final ui.Image? decodedImage;
   final List<Face> faces;
   final FaceFilterAssets filterAssets;
+  final FaceFilterType selectedFilter;
   final bool isDetecting;
 
   const _PhotoPreview({
@@ -404,6 +663,7 @@ class _PhotoPreview extends StatelessWidget {
     required this.decodedImage,
     required this.faces,
     required this.filterAssets,
+    required this.selectedFilter,
     required this.isDetecting,
   });
 
@@ -439,6 +699,7 @@ class _PhotoPreview extends StatelessWidget {
           image: decodedImage!,
           faces: faces,
           filterAssets: filterAssets,
+          filterType: selectedFilter,
         ),
       ),
     );

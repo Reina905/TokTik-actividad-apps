@@ -11,11 +11,13 @@ class StaticFilterPainter extends CustomPainter {
   final ui.Image image;
   final List<Face> faces;
   final FaceFilterAssets filterAssets;
+  final FaceFilterType filterType;
 
   const StaticFilterPainter({
     required this.image,
     required this.faces,
     required this.filterAssets,
+    required this.filterType,
   });
 
   @override
@@ -32,6 +34,7 @@ class StaticFilterPainter extends CustomPainter {
         canvas: canvas,
         face: face,
         assets: filterAssets,
+        filterType: filterType,
       );
     }
 
@@ -42,6 +45,7 @@ class StaticFilterPainter extends CustomPainter {
   bool shouldRepaint(covariant StaticFilterPainter old) {
     return old.image != image ||
         old.faces != faces ||
-        old.filterAssets != filterAssets;
+        old.filterAssets != filterAssets ||
+        old.filterType != filterType;
   }
 }

@@ -126,6 +126,13 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
     final controller = _controller;
     if (controller == null) return;
     final file = await controller.stopVideoRecording();
+
+    // Capturar el estado del filtro justo antes de navegar para
+    // que UploadScreen pueda mostrar el overlay del filtro en el video.
+    final filterAtStop = _selectedFilter;
+    final assetsAtStop = _filterAssets;
+    final facesAtStop = List<Face>.from(_faces);
+
     setState(() => _isRecording = false);
 
     if (!mounted) return;
@@ -135,6 +142,9 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
         builder: (_) => UploadScreen(
           file: File(file.path),
           isVideo: true,
+          initialFilter: filterAtStop,
+          initialFilterAssets: assetsAtStop,
+          initialFaces: facesAtStop,
         ),
       ),
     );
@@ -256,6 +266,7 @@ class _CameraFilterScreenState extends State<CameraFilterScreen> {
                                               .lensDirection ==
                                           CameraLensDirection.front,
                                       filterAssets: _filterAssets,
+                                      filterType: _selectedFilter,
                                     ),
                                   ),
                               ],

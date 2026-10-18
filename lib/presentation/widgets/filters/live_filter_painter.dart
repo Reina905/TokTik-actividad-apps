@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
@@ -12,12 +10,14 @@ class LiveFilterPainter extends CustomPainter {
   final Size frameSize;
   final bool mirror; // true para cámara frontal (selfie)
   final FaceFilterAssets filterAssets;
+  final FaceFilterType filterType;
 
   const LiveFilterPainter({
     required this.faces,
     required this.frameSize,
     required this.mirror,
     required this.filterAssets,
+    required this.filterType,
   });
 
   @override
@@ -38,6 +38,7 @@ class LiveFilterPainter extends CustomPainter {
         canvas: canvas,
         face: face,
         assets: filterAssets,
+        filterType: filterType,
       );
     }
 
@@ -49,6 +50,7 @@ class LiveFilterPainter extends CustomPainter {
     return old.faces != faces ||
         old.frameSize != frameSize ||
         old.mirror != mirror ||
-        old.filterAssets != filterAssets;
+        old.filterAssets != filterAssets ||
+        old.filterType != filterType;
   }
 }
