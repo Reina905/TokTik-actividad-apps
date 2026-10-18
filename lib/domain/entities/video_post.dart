@@ -1,5 +1,5 @@
 class VideoPost {
-  final String? id;         // ID del documento en Firestore
+  final String? id; // ID del documento en Firestore
   final String caption;
   final String videoUrl;
   final String? thumbnailUrl;

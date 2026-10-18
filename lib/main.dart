@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toktok/config/theme/app_theme.dart';
 import 'package:toktok/firebase_options.dart';
+import 'package:toktok/infrastructure/datasources/local_profile_datasource.dart';
+import 'package:toktok/infrastructure/repositories/profile_repository.dart';
 import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/providers/discover_provider.dart';
 import 'package:toktok/presentation/providers/upload_video_provider.dart';
@@ -32,6 +34,12 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => UploadVideoProvider(),
+        ),
+
+        // Para usar Firestore, solo cambia LocalProfileDataSource() por la otra implementación
+        Provider(
+          create: (_) =>
+              ProfileRepository(dataSource: LocalProfileDataSource()),
         ),
       ],
       child: MaterialApp(

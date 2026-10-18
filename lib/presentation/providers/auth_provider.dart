@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class AuthProvider extends ChangeNotifier {
-
   final FirebaseAuth _auth = FirebaseAuth.instance;
   late final StreamSubscription<User?> _userSubscription;
 
@@ -22,12 +21,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get isLoggedIn => _user != null;
+  String? get userId => _user?.uid;
   String? get userEmail => _user?.email;
   String? get userName => _user?.displayName;
 
-
   /// Lanza [AuthException] con un mensaje en español si falla.
-  Future<void> login({ required String email, required String password }) async {
+  Future<void> login({required String email, required String password}) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
     } on FirebaseAuthException catch (e) {
@@ -36,11 +35,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Lanza [AuthException] con un mensaje en español si falla.
-  Future<void> register({
-    required String name,
-    required String email,
-    required String password
-  }) async {
+  Future<void> register(
+      {required String name,
+      required String email,
+      required String password}) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -53,7 +51,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() => _auth.signOut();
-
 
   String _messageFor(String code) {
     switch (code) {
@@ -85,9 +82,7 @@ class AuthProvider extends ChangeNotifier {
     _userSubscription.cancel();
     super.dispose();
   }
-
 }
-
 
 class AuthException implements Exception {
   final String message;
