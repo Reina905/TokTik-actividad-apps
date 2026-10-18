@@ -17,6 +17,7 @@ class VideoRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   static const String _collection = 'videos';
+  static const String _likesSubcollection = 'likes';
 
   Future<String> saveVideo({
     required String cloudinaryUrl,
@@ -110,9 +111,47 @@ class VideoRepository {
     );
   }
 
-  Future<void> toggleLike(String videoId) async {
-    await _db.collection(_collection).doc(videoId).update({
-      'likes': FieldValue.increment(1),
+  /// Likes en videos/{videoId}/likes/{uid}.
+  Future<({bool liked, int likes})> getLikeStatus({
+    required String videoId,
+    String? uid,
+  }) async {
+    final videoRef = _db.collection(_collection).doc(videoId);
+
+    final results = await Future.wait([
+      videoRef.get(),
+      if (uid != null) videoRef.collection(_likesSubcollection).doc(uid).get(),
+    ]);
+
+    return (
+      liked: uid != null && results[1].exists,
+      likes: (results[0].data()?['likes'] ?? 0) as int,
+    );
+  }
+
+  /// Devuelve `true` si el video quedó con like.
+  Future<bool> toggleLike({
+    required String videoId,
+    required String uid,
+  }) {
+    final videoRef = _db.collection(_collection).doc(videoId);
+    final likeRef = videoRef.collection(_likesSubcollection).doc(uid);
+
+    return _db.runTransaction((transaction) async {
+      final likeDoc = await transaction.get(likeRef);
+
+      if (likeDoc.exists) {
+        transaction.delete(likeRef);
+        transaction.update(videoRef, {'likes': FieldValue.increment(-1)});
+        return false;
+      }
+
+      transaction.set(likeRef, {
+        'userId': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      transaction.update(videoRef, {'likes': FieldValue.increment(1)});
+      return true;
     });
   }
 

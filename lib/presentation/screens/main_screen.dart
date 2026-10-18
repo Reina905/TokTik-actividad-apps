@@ -7,7 +7,6 @@ import 'package:toktok/presentation/screens/camera/camera_filter_screen.dart';
 import 'package:toktok/presentation/screens/discover/discover_screen.dart';
 import 'package:toktok/presentation/screens/profile/profile_screen.dart';
 import 'package:toktok/presentation/screens/upload/upload_screen.dart';
-import 'package:toktok/presentation/screens/feed/feed_screen.dart';
 import 'package:toktok/presentation/widgets/shared/custom_bottom_navbar.dart';
 
 class MainScreen extends StatefulWidget {
@@ -30,19 +29,18 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _screens = [
       const DiscoverScreen(),  // 0 = Descubrir (home)
-      const FeedScreen(),      // 1 = Feed
-      const SizedBox.shrink(), // 2 = botón +, sin pantalla
-      ProfileScreen(key: _profileKey), // 3 = Perfil
+      const SizedBox.shrink(), // 1 = botón +, sin pantalla
+      ProfileScreen(key: _profileKey), // 2 = Perfil
     ];
   }
 
   void _onTabTap(int index) {
-    if (index == 2) {
+    if (index == 1) {
       _showAddContentModal();
       return;
     }
     // Al volver al perfil, recargar videos para mostrar publicaciones nuevas
-    if (index == 3) {
+    if (index == 2) {
       _profileKey.currentState?.refresh();
     }
     setState(() => _currentIndex = index);

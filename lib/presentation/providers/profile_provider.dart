@@ -51,7 +51,7 @@ class ProfileProvider extends ChangeNotifier {
               bio: '',
               following: 0,
               followers: 0,
-              likes: 0,
+              likes: userVideos.fold(0, (total, v) => total + v.likes),
             );
             videos = userVideos;
           } else {

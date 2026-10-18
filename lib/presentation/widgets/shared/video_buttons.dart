@@ -1,7 +1,10 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:toktok/config/helpers/human_formats.dart';
 import 'package:toktok/domain/entities/video_post.dart';
+import 'package:toktok/infrastructure/repositories/video_repository.dart';
+import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/widgets/auth/auth_popup.dart';
 
 class VideoButtons extends StatelessWidget {
@@ -30,12 +33,7 @@ class VideoButtons extends StatelessWidget {
         ],
 
         // ── Me gusta ─────────────────────────────────────────────────────
-        _CustomIconButton(
-          value: video.likes,
-          iconColor: Colors.red,
-          iconData: Icons.favorite,
-          onPressed: () => requireAuth(context),
-        ),
+        _LikeButton(video: video),
         const SizedBox(height: 20),
 
         // ── Comentarios ───────────────────────────────────────────────────
@@ -62,6 +60,117 @@ class VideoButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Me gusta (Firestore) ────────────────────────────────────────────────────
+
+class _LikeButton extends StatefulWidget {
+  final VideoPost video;
+
+  const _LikeButton({required this.video});
+
+  @override
+  State<_LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<_LikeButton> {
+  late int _likes = widget.video.likes;
+  bool _liked = false;
+  bool _isToggling = false;
+
+  String? _loadedForUid;
+  bool _loadedOnce = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final uid = context.watch<AuthProvider>().userId;
+    if (!_loadedOnce || uid != _loadedForUid) {
+      _loadedOnce = true;
+      _loadedForUid = uid;
+      _loadStatus();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _LikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.video.id != widget.video.id) {
+      _likes = widget.video.likes;
+      _liked = false;
+      _loadStatus();
+    }
+  }
+
+  Future<void> _loadStatus() async {
+    final videoId = widget.video.id;
+    if (videoId == null) return;
+
+    try {
+      final status = await context
+          .read<VideoRepository>()
+          .getLikeStatus(videoId: videoId, uid: _loadedForUid);
+
+      if (!mounted || videoId != widget.video.id || _isToggling) return;
+      setState(() {
+        _liked = status.liked;
+        _likes = status.likes;
+      });
+    } catch (e) {
+      debugPrint('Error cargando likes: $e');
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final videoId = widget.video.id;
+    final uid = context.read<AuthProvider>().userId;
+    if (_isToggling || videoId == null || uid == null) return;
+
+    final repository = context.read<VideoRepository>();
+    final messenger = ScaffoldMessenger.of(context);
+    final wasLiked = _liked;
+
+    setState(() {
+      _isToggling = true;
+      _liked = !wasLiked;
+      _likes += wasLiked ? -1 : 1;
+    });
+
+    try {
+      final liked = await repository.toggleLike(videoId: videoId, uid: uid);
+      if (!mounted) return;
+      if (liked != _liked) {
+        setState(() {
+          _liked = liked;
+          _likes += liked ? 1 : -1;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error guardando like: $e');
+      if (!mounted) return;
+      setState(() {
+        _liked = wasLiked;
+        _likes += wasLiked ? 1 : -1;
+      });
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('No se pudo guardar el me gusta')),
+        );
+    } finally {
+      if (mounted) setState(() => _isToggling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomIconButton(
+      value: _likes,
+      iconColor: _liked ? Colors.red : Colors.white,
+      iconData: Icons.favorite,
+      onPressed: () => requireAuth(context, onAuthenticated: _toggleLike),
     );
   }
 }

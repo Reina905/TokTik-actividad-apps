@@ -35,25 +35,16 @@ class CustomBottomNavbar extends StatelessWidget {
                 onTap: () => onTap(0),
               ),
 
-              // Índice 1 — Feed
-              _NavItem(
-                icon: Icons.play_circle_outline,
-                activeIcon: Icons.play_circle,
-                label: 'Feed',
-                isActive: currentIndex == 1,
-                onTap: () => onTap(1),
-              ),
+              // Índice 1 — Botón + (abre modal, sin pantalla propia)
+              _AddButton(onTap: () => onTap(1)),
 
-              // Índice 2 — Botón + (abre modal, sin pantalla propia)
-              _AddButton(onTap: () => onTap(2)),
-
-              // Índice 3 — Perfil
+              // Índice 2 — Perfil
               _NavItem(
                 icon: Icons.person_outline,
                 activeIcon: Icons.person,
                 label: 'Perfil',
-                isActive: currentIndex == 3,
-                onTap: () => onTap(3),
+                isActive: currentIndex == 2,
+                onTap: () => onTap(2),
               ),
             ],
           ),
