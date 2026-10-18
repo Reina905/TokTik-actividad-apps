@@ -1,14 +1,19 @@
 class VideoPost {
+  final String? id; // ID del documento en Firestore
   final String caption;
   final String videoUrl;
-  final String authorUid;
+  final String? thumbnailUrl;
+  final String? userId;
   final int likes;
   final int views;
 
-  VideoPost(
-      {required this.caption,
-      required this.videoUrl,
-      required this.authorUid,
-      this.likes = 0,
-      this.views = 0});
+  VideoPost({
+    this.id,
+    required this.caption,
+    required this.videoUrl,
+    this.thumbnailUrl,
+    this.userId,
+    this.likes = 0,
+    this.views = 0,
+  });
 }

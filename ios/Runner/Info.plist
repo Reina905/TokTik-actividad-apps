@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>TokTik necesita acceso a la cámara para grabar videos y aplicar filtros faciales.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TokTik necesita acceso al micrófono para grabar el audio de los videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TokTik necesita acceso a tu galería para que puedas seleccionar fotos y videos.</string>
 </dict>
 </plist>

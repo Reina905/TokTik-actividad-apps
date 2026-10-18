@@ -5,6 +5,7 @@ import 'package:toktok/config/theme/app_theme.dart';
 import 'package:toktok/firebase_options.dart';
 import 'package:toktok/presentation/providers/auth_provider.dart';
 import 'package:toktok/presentation/providers/discover_provider.dart';
+import 'package:toktok/presentation/providers/upload_video_provider.dart';
 import 'package:toktok/presentation/screens/main_screen.dart';
 
 void main() async {
@@ -12,7 +13,6 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
   runApp(const MyApp());
 }
 
@@ -29,6 +29,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => AuthProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => UploadVideoProvider(),
         ),
       ],
       child: MaterialApp(
