@@ -8,10 +8,6 @@ Clon sencillo de TikTok hecho con Flutter. Los usuarios pueden registrarse, subi
 
 ## Importante
 
-### Los videos ya no se descargan ni se guardan en el repositorio
-
-Las versiones anteriores del proyecto usaban 8 videos locales (`1.mp4` a `8.mp4`). **Ya no son necesarios.** Ahora los archivos se suben a **Cloudinary** y en **Firestore** solo se guarda la información de cada publicación (URL, descripción, autor, etc.), así que el repositorio no contiene ningún video.
-
 ### ¿Por qué Cloudinary y no Firebase Storage?
 
 Usamos Cloudinary en lugar de Firebase Storage porque, a pesar de que Firebase Storage tiene un plan gratuito, activarlo exige registrar una tarjeta de crédito y datos de facturación. Cloudinary ofrece un plan gratuito que no los pide, y nos sirve igual para alojar los videos y las fotos.
